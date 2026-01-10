@@ -2,5 +2,4 @@
 .env
 GPT/
 __pycache__/
-__pycache__/
 DECISIONS.md
