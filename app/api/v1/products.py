@@ -4,7 +4,7 @@ from typing import List
 
 from app.core.database import SessionLocal
 from app.models.product import Product
-from app.api.v1.schemas import ProductCreate, ProductOut
+from app.api.v1.schemas import ProductCreate, ProductOut, ProductUpdate
 
 # ============================================================================
 # Products Router
@@ -87,3 +87,42 @@ def get_product(product_id: int):
         raise HTTPException(status_code=404, detail="Product not found")
 
     return product
+
+# ---------------------------------------------------------------------------
+# UPDATE (PARTIAL)
+# ---------------------------------------------------------------------------
+# This endpoint performs a partial update on a Product entity.
+# It follows the PATCH semantics: only provided fields are updated.
+# Common use cases:
+# - Edit product description
+# - Soft delete / reactivate product via `active` flag
+# ---------------------------------------------------------------------------
+
+@router.patch("/{product_id}", response_model=ProductOut)
+def update_product(product_id: int, payload: ProductUpdate):
+    """
+    Partially update a product by its ID.
+
+    - Updates only the fields provided in the request body
+    - Preserves existing values for omitted fields
+    - Raises 404 if the product does not exist
+    """
+    db: Session = SessionLocal()
+
+    # Retrieve product by primary key
+    product = db.query(Product).filter(Product.id == product_id).first()
+
+    if not product:
+        db.close()
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # Apply only provided fields (PATCH behavior)
+    for field, value in payload.dict(exclude_unset=True).items():
+        setattr(product, field, value)
+
+    db.commit()
+    db.refresh(product)
+    db.close()
+
+    return product
+
