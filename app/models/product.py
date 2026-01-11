@@ -1,10 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from sqlalchemy.orm import declarative_base
+from app.core.database import Base
 from sqlalchemy.sql import func
-
-# Base class for all SQLAlchemy models
-# It stores metadata about tables and mappings
-Base = declarative_base()
 
 class Product(Base):
     """
