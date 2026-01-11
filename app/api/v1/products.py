@@ -47,37 +47,46 @@ def create_product(payload: ProductCreate):
 
 
 # ---------------------------------------------------------------------------
-# READ (LIST)
+# READ (LIST) with filters and pagination
 # ---------------------------------------------------------------------------
-# This endpoint retrieves products from the database.
-# It supports optional filtering by the `active` flag via query parameters.
+# Supports:
+# - Filtering by active status
+# - Pagination using skip & limit
+# - Backend-enforced max limit to prevent abuse
 #
 # Examples:
-# - GET /api/v1/products            -> returns all products
-# - GET /api/v1/products?active=true  -> returns only active products
-# - GET /api/v1/products?active=false -> returns only inactive products
+# - GET /api/v1/products
+# - GET /api/v1/products?active=true
+# - GET /api/v1/products?skip=0&limit=20
 # ---------------------------------------------------------------------------
 @router.get("", response_model=List[ProductOut])
-def list_products(active: Optional[bool] = Query(None)):
+def list_products(
+    active: Optional[bool] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),  # max 100 enforced
+):
     """
-    Retrieve a list of products.
+    Retrieve a list of products with optional filtering and pagination.
 
-    - If `active` is not provided, all products are returned
-    - If `active` is provided, results are filtered by active status
+    - active: filters by active status if provided
+    - skip: number of records to skip (offset)
+    - limit: max number of records to return (capped at 100)
     """
     db: Session = SessionLocal()
 
-    # Base query (no filters applied yet)
+    # Base query
     query = db.query(Product)
 
-    # Apply filter only if query parameter is provided
+    # Optional filter
     if active is not None:
         query = query.filter(Product.active == active)
 
-    products = query.all()
+    # Pagination
+    products = query.offset(skip).limit(limit).all()
 
     db.close()
     return products
+
 
 
 
