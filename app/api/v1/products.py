@@ -7,6 +7,8 @@ from app.core.database import SessionLocal
 from app.models.product import Product
 from app.api.v1.schemas import ProductCreate, ProductOut, ProductUpdate
 from app.core.deps import get_db
+from app.core.security import get_current_user
+from app.models.user import User
 
 # ============================================================================
 # Products Router
@@ -28,6 +30,7 @@ router = APIRouter(
 def create_product(
     payload: ProductCreate,
     db: Session = Depends(get_db),  # DB session injected here
+    current_user: User = Depends(get_current_user), # Requires authentication
 ):
     """
     Create a new product.
@@ -71,6 +74,7 @@ def list_products(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),  # DB session injected here
+    current_user: User = Depends(get_current_user), # Requires authentication
 ):
     """
     Retrieve a list of products with optional filtering and pagination.
@@ -96,6 +100,7 @@ def list_products(
 def get_product(
     product_id: int,
     db: Session = Depends(get_db), # DB session injected here
+    current_user: User = Depends(get_current_user), # Requires authentication
 ):
     """
     Retrieve a single product by its ID.
@@ -128,6 +133,7 @@ def update_product(
     product_id: int, 
     payload: ProductUpdate,
     db: Session = Depends(get_db), # DB session injected here
+    current_user: User = Depends(get_current_user), # Requires authentication
 ):
     """
     Partially update a product by its ID.

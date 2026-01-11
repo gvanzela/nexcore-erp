@@ -3,15 +3,16 @@ from fastapi import FastAPI
 from app.core.config import settings
 from app.api.v1.health import router as health_router
 from app.api.v1.products import router as products_router
+from app.api.v1.auth import router as auth_router
 
 # Create FastAPI application instance
-# Application metadata (title) is loaded from environment settings
 app = FastAPI(title=settings.app_name)
 
-# Register health check routes
-# Used to verify API and infrastructure status
+# Health check routes
 app.include_router(health_router)
 
-# Register product routes
-# Exposes CRUD operations for Product entity
+# Product routes
 app.include_router(products_router)
+
+# Auth routes
+app.include_router(auth_router, prefix="/api/v1")
