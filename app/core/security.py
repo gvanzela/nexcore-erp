@@ -3,6 +3,7 @@
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
+import secrets
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -10,6 +11,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.deps import get_db
 from app.models.user import User
+from app.models.refresh_token import RefreshToken
+
 
 # app/core/security.py
 
@@ -116,3 +119,46 @@ def get_current_user(
         )
 
     return user
+
+
+# Refresh token expiration (days)
+REFRESH_TOKEN_EXPIRE_DAYS = 7
+
+
+def generate_refresh_token() -> str:
+    """
+    Generate a secure random refresh token.
+
+    - Uses cryptographically secure randomness
+    - Returned value is the RAW token (to send to client)
+    """
+    return secrets.token_urlsafe(64)
+
+
+def get_refresh_token_expiration() -> datetime:
+    """
+    Calculate refresh token expiration datetime.
+    """
+    return datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+
+
+def create_refresh_token(
+    *,
+    user_id: int,
+    token_hash: str,
+    expires_at: datetime,
+) -> RefreshToken:
+    """
+    Build a RefreshToken ORM object.
+
+    - user_id: owner of the session
+    - token_hash: hashed refresh token (never store raw)
+    - expires_at: expiration timestamp
+    """
+    return RefreshToken(
+        user_id=user_id,
+        token_hash=token_hash,
+        expires_at=expires_at,
+        is_active=True,
+    )
+

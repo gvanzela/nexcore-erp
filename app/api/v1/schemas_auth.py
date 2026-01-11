@@ -34,4 +34,22 @@ class Token(BaseModel):
     - token_type: usually 'bearer' (Authorization header standard)
     """
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+
+
+class AccessToken(BaseModel):
+    """
+    Authentication response returned after a token refresh.
+
+    - access_token: new signed JWT token
+    - token_type: usually 'bearer' (Authorization header standard)
+
+    Note:
+    This response does NOT include a refresh token.
+    The existing refresh token remains valid until it expires.
+    """
+    access_token: str
+    token_type: str = "bearer"
+
+
