@@ -1,11 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from fastapi import Query
+from fastapi import Query, Depends
 
 from app.core.database import SessionLocal
 from app.models.product import Product
 from app.api.v1.schemas import ProductCreate, ProductOut, ProductUpdate
+from app.core.deps import get_db
 
 # ============================================================================
 # Products Router
@@ -24,7 +25,10 @@ router = APIRouter(
 # CREATE
 # ---------------------------------------------------------------------------
 @router.post("", response_model=ProductOut)
-def create_product(payload: ProductCreate):
+def create_product(
+    payload: ProductCreate,
+    db: Session = Depends(get_db),  # DB session injected here
+):
     """
     Create a new product.
 
@@ -32,7 +36,6 @@ def create_product(payload: ProductCreate):
     - Persists the product in the database
     - Returns the created product
     """
-    db: Session = SessionLocal()
 
     # Create Product ORM object from request payload
     product = Product(**payload.dict())
@@ -42,7 +45,6 @@ def create_product(payload: ProductCreate):
     db.commit()
     db.refresh(product)
 
-    db.close()
     return product
 
 
@@ -59,21 +61,24 @@ def create_product(payload: ProductCreate):
 # - GET /api/v1/products?active=true
 # - GET /api/v1/products?skip=0&limit=20
 # ---------------------------------------------------------------------------
+# Now the database session is injected by FastAPI.
+# The endpoint no longer creates or closes the DB connection manually.
+# ---------------------------------------------------------------------------
+
 @router.get("", response_model=List[ProductOut])
 def list_products(
     active: Optional[bool] = Query(None),
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),  # max 100 enforced
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),  # DB session injected here
 ):
     """
     Retrieve a list of products with optional filtering and pagination.
 
-    - active: filters by active status if provided
-    - skip: number of records to skip (offset)
-    - limit: max number of records to return (capped at 100)
+    - active: filter by active status (optional)
+    - skip: number of records to skip
+    - limit: max number of records to return (capped)
     """
-    db: Session = SessionLocal()
-
     # Base query
     query = db.query(Product)
 
@@ -82,20 +87,16 @@ def list_products(
         query = query.filter(Product.active == active)
 
     # Pagination
-    products = query.offset(skip).limit(limit).all()
-
-    db.close()
-    return products
-
-
-
-
+    return query.offset(skip).limit(limit).all()
 
 # ---------------------------------------------------------------------------
 # READ (BY ID)
 # ---------------------------------------------------------------------------
 @router.get("/{product_id}", response_model=ProductOut)
-def get_product(product_id: int):
+def get_product(
+    product_id: int,
+    db: Session = Depends(get_db), # DB session injected here
+):
     """
     Retrieve a single product by its ID.
 
@@ -103,12 +104,9 @@ def get_product(product_id: int):
     - Returns the product if found
     - Raises 404 if the product does not exist
     """
-    db: Session = SessionLocal()
 
     # Query product by primary key
-    product = db.query(Product).filter(Product.id == product_id).first()
-
-    db.close()
+    product = db.get(Product, product_id)
 
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -126,7 +124,11 @@ def get_product(product_id: int):
 # ---------------------------------------------------------------------------
 
 @router.patch("/{product_id}", response_model=ProductOut)
-def update_product(product_id: int, payload: ProductUpdate):
+def update_product(
+    product_id: int, 
+    payload: ProductUpdate,
+    db: Session = Depends(get_db), # DB session injected here
+):
     """
     Partially update a product by its ID.
 
@@ -134,13 +136,11 @@ def update_product(product_id: int, payload: ProductUpdate):
     - Preserves existing values for omitted fields
     - Raises 404 if the product does not exist
     """
-    db: Session = SessionLocal()
 
     # Retrieve product by primary key
-    product = db.query(Product).filter(Product.id == product_id).first()
+    product = db.get(Product, product_id)
 
     if not product:
-        db.close()
         raise HTTPException(status_code=404, detail="Product not found")
 
     # Apply only provided fields (PATCH behavior)
@@ -149,7 +149,6 @@ def update_product(product_id: int, payload: ProductUpdate):
 
     db.commit()
     db.refresh(product)
-    db.close()
 
     return product
 

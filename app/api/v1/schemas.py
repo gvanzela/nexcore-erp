@@ -23,6 +23,7 @@ class ProductUpdate(BaseModel):
     - All fields are optional
     - Only provided fields will be updated
     """
+    code: Optional[str] = None
     description: Optional[str] = None
     active: Optional[bool] = None
 
