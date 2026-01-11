@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+from fastapi import Query
 
 from app.core.database import SessionLocal
 from app.models.product import Product
@@ -48,20 +49,37 @@ def create_product(payload: ProductCreate):
 # ---------------------------------------------------------------------------
 # READ (LIST)
 # ---------------------------------------------------------------------------
+# This endpoint retrieves products from the database.
+# It supports optional filtering by the `active` flag via query parameters.
+#
+# Examples:
+# - GET /api/v1/products            -> returns all products
+# - GET /api/v1/products?active=true  -> returns only active products
+# - GET /api/v1/products?active=false -> returns only inactive products
+# ---------------------------------------------------------------------------
 @router.get("", response_model=List[ProductOut])
-def list_products():
+def list_products(active: Optional[bool] = Query(None)):
     """
-    Retrieve all products.
+    Retrieve a list of products.
 
-    - Fetches all Product records from the database
-    - Returns a list of products
+    - If `active` is not provided, all products are returned
+    - If `active` is provided, results are filtered by active status
     """
     db: Session = SessionLocal()
 
-    products = db.query(Product).all()
+    # Base query (no filters applied yet)
+    query = db.query(Product)
+
+    # Apply filter only if query parameter is provided
+    if active is not None:
+        query = query.filter(Product.active == active)
+
+    products = query.all()
 
     db.close()
     return products
+
+
 
 
 # ---------------------------------------------------------------------------
