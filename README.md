@@ -57,8 +57,8 @@ app
 │   └── user.py                # User model
 │
 │  
-├── docker-compose.yml            # Local PostgreSQL setup  
-├── .env                          # Environment variables (ignored)  
+├── docker-compose.yml         # Local PostgreSQL setup  
+├── .env                       # Environment variables (ignored)  
 ├── README.md  
 └── ROADMAP.md  
 ```
