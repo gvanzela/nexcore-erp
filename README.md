@@ -32,7 +32,7 @@ Client / Swagger / Frontend
 ---
 
 ## Project Structure
-
+```
 nexcore-erp/  
 app
 ├── api
@@ -61,7 +61,7 @@ app
 ├── .env                          # Environment variables (ignored)  
 ├── README.md  
 └── ROADMAP.md  
-
+```
 ---
 
 ## Design Principles
