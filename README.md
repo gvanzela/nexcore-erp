@@ -34,25 +34,28 @@ Client / Swagger / Frontend
 ## Project Structure
 
 nexcore-erp/  
-├── app/  
-│   ├── api/  
-│   │   └── v1/  
-│   │       ├── health.py        # Health & DB check endpoints  
-│   │       ├── products.py      # Product CRUD endpoints  
-│   │       └── schemas.py       # Pydantic schemas (API contracts)  
-│   │  
-│   ├── core/  
-│   │   ├── config.py            # Environment & settings loader  
-│   │   └── database.py          # SQLAlchemy engine & session  
-│   │  
-│   ├── models/  
-│   │   └── product.py           # Product ORM model  
-│   │  
-│   └── main.py                  # Application bootstrap  
-│  
-├── alembic/  
-│   ├── versions/                # Database migration files  
-│   └── env.py                   # Alembic configuration  
+app
+├── api
+│   └── v1
+│       ├── __init__.py        # Initializes the v1 API package
+│       ├── auth.py            # Authentication endpoints and logic
+│       ├── health.py          # Health check endpoint
+│       ├── products.py        # Product endpoints
+│       ├── schemas.py         # Shared Pydantic schemas for the API
+│       └── schemas_auth.py    # Auth-specific Pydantic schemas
+├── core
+│   ├── __init__.py            # Initializes the core package
+│   ├── config.py              # Application configuration
+│   ├── database.py            # Database connection and setup
+│   ├── deps.py                # Common dependencies / dependency injection
+│   └── security.py            # Security utilities (e.g. JWT, password hashing)
+├── main.py                    # Application entry point
+└── models
+│   ├── __init__.py            # Initializes the models package
+│   ├── product.py             # Product model
+│   ├── refresh_token.py       # Refresh token model
+│   └── user.py                # User model
+│
 │  
 ├── docker-compose.yml            # Local PostgreSQL setup  
 ├── .env                          # Environment variables (ignored)  
