@@ -125,7 +125,7 @@ def signup(
 
 
 # Create refresh token endpoint
-@router.post("/refresh", response_model=AccessToken)
+@router.post("/refresh", response_model=Token)
 def refresh_token(
     refresh_token: str,
     db: Session = Depends(get_db),
@@ -155,14 +155,40 @@ def refresh_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
+    
+    # 3) Invalidate the used refresh token
+    # Refresh tokens must be single-use to prevent replay attacks
+    stored_token.is_active = False
 
-    # 3) Generate new access token
+    # Persist the change
+    db.commit()
+
+    # 4) Generate RAW refresh token (to return to client)
+    raw_refresh_token = generate_refresh_token()
+
+    # 5) Hash and expiration (what goes to DB)
+    token_hash = get_password_hash(raw_refresh_token)
+    expires_at = get_refresh_token_expiration()
+
+    # 6) Create refresh token DB record
+    new_refresh_token = create_refresh_token(
+        user_id=stored_token.user_id,
+        token_hash=token_hash,
+        expires_at=expires_at,
+    )
+
+    db.add(new_refresh_token)
+    db.commit()
+
+    # 7) Generate new access token
     access_token = create_access_token(subject=str(stored_token.user_id))
 
     return {
         "access_token": access_token,
+        "refresh_token": raw_refresh_token,
         "token_type": "bearer",
     }
+
 
 # Logout endpoint
 @router.post("/logout", response_model=LogoutResponse)
