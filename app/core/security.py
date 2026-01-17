@@ -9,8 +9,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.deps import get_db
 from app.models.user import User
+from app.core.deps import get_db
 from app.models.refresh_token import RefreshToken
 
 
@@ -77,7 +77,6 @@ def verify_access_token(token: str) -> str:
     except JWTError:
         raise ValueError("Invalid or expired token")
 
-
 # OAuth2 scheme definition
 # Reads the JWT from: Authorization: Bearer <token>
 security = HTTPBearer()
@@ -122,6 +121,35 @@ def get_current_user(
         )
 
     return user
+
+
+# Require a minimum role level for access
+def require_min_role(min_level: int):
+    """
+    Dependency factory to enforce a minimum role level.
+
+    Usage:
+        Depends(require_min_role(100))  # admin-only
+    """
+
+    def _check_role(current_user: User = Depends(get_current_user)):
+        # Ensure the user has an associated role
+        if not current_user.role or not current_user.role.active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User role is inactive or missing",
+            )
+
+        # Enforce minimum role level
+        if current_user.role.level < min_level:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+
+        return current_user
+
+    return _check_role
 
 
 # Refresh token expiration (days)

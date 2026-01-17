@@ -1,5 +1,6 @@
 from typing import Generator
 from sqlalchemy.orm import Session
+from fastapi import Depends, HTTPException, status
 
 from app.core.database import SessionLocal
 
@@ -25,8 +26,9 @@ def get_db() -> Generator[Session, None, None]:
     to manually call db.close() in every endpoint.
     """
     db = SessionLocal()
-    try:
+    try:    
         yield db
     finally:
         # Always close the session, even if an error happens
         db.close()
+
