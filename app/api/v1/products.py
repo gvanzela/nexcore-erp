@@ -9,6 +9,7 @@ from app.api.v1.schemas import ProductCreate, ProductOut, ProductUpdate
 from app.core.deps import get_db
 from app.core.security import get_current_user
 from app.models.user import User
+from app.core.audit import log_action
 
 # ============================================================================
 # Products Router
@@ -150,8 +151,20 @@ def update_product(
         raise HTTPException(status_code=404, detail="Product not found")
 
     # Apply only provided fields (PATCH behavior)
-    for field, value in payload.dict(exclude_unset=True).items():
+    updates = payload.dict(exclude_unset=True)
+    for field, value in updates.items():
         setattr(product, field, value)
+
+    # After applying updates
+    if updates:
+        action = "DEACTIVATE_PRODUCT" if updates.get("active") is False else "UPDATE_PRODUCT"
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            action=action,
+            resource="product",
+            resource_id=product.id,
+        )
 
     db.commit()
     db.refresh(product)

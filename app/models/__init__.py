@@ -3,3 +3,4 @@ from .user import User
 from .refresh_token import RefreshToken
 from .role import Role
 from .audit_log import AuditLog
+from .customer import Customer

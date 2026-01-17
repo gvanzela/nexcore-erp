@@ -30,7 +30,7 @@ class User(Base):
 
     # Foreign key linking the user to a role (RBAC)
     # Defines what the user is allowed to do in the system
-    role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
 
     # Relationship to access role details (name, level, permissions)
     role = relationship("Role")
