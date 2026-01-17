@@ -21,8 +21,11 @@ class Customer(Base):
     # Primary key
     id = Column(Integer, primary_key=True, index=True)
 
-    # Legal or display name
+    # Legal or display name (fantasy / operational name)
     name = Column(String(255), nullable=False)
+
+    # Legal registered name (company name / razao social)
+    legal_name = Column(String(255), nullable=True)
 
     # CPF / CNPJ / any external identifier
     document = Column(String(50), unique=True, nullable=True)
