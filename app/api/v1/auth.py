@@ -10,6 +10,9 @@ from app.api.v1.schemas_auth import UserLogin, Token, UserCreate, AccessToken, L
 # Database dependency (shared session)
 from app.core.deps import get_db
 
+# Audit logging
+from app.core.audit import log_action
+
 # Security helpers (password + JWT)
 from app.core.security import (
     verify_password,
@@ -75,6 +78,14 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
     # 8) Persist refresh token in database
     db.add(refresh_token)
     db.commit()
+
+    # 8.1) Audit successful login
+    log_action(
+        db=db,
+        user_id=user.id,
+        action="LOGIN",
+        resource="auth",
+    )
 
     # 9) Return tokens to client
     return {
@@ -183,6 +194,14 @@ def refresh_token(
     # 7) Generate new access token
     access_token = create_access_token(subject=str(stored_token.user_id))
 
+    # Audit refresh token rotation
+    log_action(
+        db=db,
+        user_id=stored_token.user_id,
+        action="REFRESH_TOKEN",
+        resource="auth",
+    )
+
     return {
         "access_token": access_token,
         "refresh_token": raw_refresh_token,
@@ -225,6 +244,14 @@ def logout(
     # 3) Revoke token
     stored_token.is_active = False
     db.commit()
+
+    # 4) Audit logout action
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        action="LOGOUT",
+        resource="auth",
+    )
 
     return {"message": "Logged out successfully"}
 
