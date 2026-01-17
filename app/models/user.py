@@ -1,7 +1,8 @@
 # app/models/user.py
 
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from sqlalchemy.types import DateTime
 
 from app.core.database import Base
@@ -26,6 +27,13 @@ class User(Base):
 
     # Soft delete / account status
     is_active = Column(Boolean, default=True, nullable=False)
+
+    # Foreign key linking the user to a role (RBAC)
+    # Defines what the user is allowed to do in the system
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
+
+    # Relationship to access role details (name, level, permissions)
+    role = relationship("Role")
 
     # Audit fields
     created_at = Column(
