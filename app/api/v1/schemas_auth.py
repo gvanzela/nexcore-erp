@@ -53,3 +53,21 @@ class AccessToken(BaseModel):
     token_type: str = "bearer"
 
 
+class LogoutRequest(BaseModel):
+    """
+    Request body for logout.
+
+    - refresh_token: refresh token to be revoked
+    """
+    refresh_token: str
+
+
+class LogoutResponse(BaseModel):
+    """
+    Response returned after a successful logout.
+
+    - message: confirmation message
+    """
+    message: str
+
+

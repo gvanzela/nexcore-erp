@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 # Request / response schemas (API contracts)
-from app.api.v1.schemas_auth import UserLogin, Token, UserCreate, AccessToken
+from app.api.v1.schemas_auth import UserLogin, Token, UserCreate, AccessToken, LogoutRequest, LogoutResponse
 
 # Database dependency (shared session)
 from app.core.deps import get_db
@@ -18,6 +18,7 @@ from app.core.security import (
     get_refresh_token_expiration,
     create_refresh_token,
     get_password_hash,
+    get_current_user,
 )
 
 # User database model
@@ -162,3 +163,42 @@ def refresh_token(
         "access_token": access_token,
         "token_type": "bearer",
     }
+
+# Logout endpoint
+@router.post("/logout", response_model=LogoutResponse)
+def logout(
+    data: LogoutRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Revoke a refresh token (logout).
+    """
+    # 1) Load active refresh tokens for current user
+    tokens = (
+        db.query(RefreshToken)
+        .filter(
+            RefreshToken.user_id == current_user.id,
+            RefreshToken.is_active.is_(True),
+        )
+        .all()
+    )
+
+    # 2) Find matching token by comparing hashes
+    stored_token = next(
+        (t for t in tokens if verify_password(data.refresh_token, t.token_hash)),
+        None,
+    )
+
+    if not stored_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
+
+    # 3) Revoke token
+    stored_token.is_active = False
+    db.commit()
+
+    return {"message": "Logged out successfully"}
+
