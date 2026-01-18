@@ -38,6 +38,8 @@ class ProductOut(BaseModel):
     """
     id: int
     code: str
+    name: str
+    short_name: str
     description: str
     active: bool
 
