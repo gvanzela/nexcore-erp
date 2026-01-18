@@ -32,35 +32,58 @@ Client / Swagger / Frontend
 ---
 
 ## Project Structure
-```
-nexcore-erp/  
-app
-├── api
-│   └── v1
-│       ├── __init__.py        # Initializes the v1 API package
-│       ├── auth.py            # Authentication endpoints and logic
-│       ├── health.py          # Health check endpoint
-│       ├── products.py        # Product endpoints
-│       ├── schemas.py         # Shared Pydantic schemas for the API
-│       └── schemas_auth.py    # Auth-specific Pydantic schemas
-├── core
-│   ├── __init__.py            # Initializes the core package
-│   ├── config.py              # Application configuration
-│   ├── database.py            # Database connection and setup
-│   ├── deps.py                # Common dependencies / dependency injection
-│   └── security.py            # Security utilities (e.g. JWT, password hashing)
-├── main.py                    # Application entry point
-└── models
-│   ├── __init__.py            # Initializes the models package
-│   ├── product.py             # Product model
-│   ├── refresh_token.py       # Refresh token model
-│   └── user.py                # User model
+
+```text
+nexcore-erp/
+├── README.md                  # High-level project overview and architecture
+├── ROADMAP.md                 # Planned features, milestones and long-term vision
+├── DECISIONS.md               # Architectural Decision Records (ADR)
+├── docker-compose.yml         # Local infrastructure (PostgreSQL, services)
+├── alembic.ini                # Alembic configuration
 │
-│  
-├── docker-compose.yml         # Local PostgreSQL setup  
-├── .env                       # Environment variables (ignored)  
-├── README.md  
-└── ROADMAP.md  
+├── alembic/
+│   ├── env.py                 # Alembic runtime environment and DB context
+│   └── versions/              # Database migration history (core + staging)
+│
+├── app/
+│   ├── main.py                # Application entrypoint (FastAPI bootstrap)
+│   │
+│   ├── api/
+│   │   └── v1/                # Versioned API (contract stability)
+│   │       ├── __init__.py
+│   │       ├── health.py      # Health check endpoint
+│   │       ├── auth.py        # Authentication & token lifecycle
+│   │       ├── products.py    # Product CRUD endpoints (core domain)
+│   │       ├── customers.py   # Customer / Supplier endpoints
+│   │       ├── schemas.py     # Shared Pydantic schemas (request / response)
+│   │       └── schemas_auth.py# Auth-specific schemas
+│   │
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── config.py          # Application settings and environment loading
+│   │   ├── database.py        # Database engine and session management
+│   │   ├── deps.py            # Dependency injection (DB, auth, RBAC)
+│   │   ├── security.py        # JWT, password hashing, auth helpers
+│   │   └── audit.py           # Centralized audit logging
+│   │
+│   └── models/
+│       ├── __init__.py
+│       ├── product.py         # Product core domain model
+│       ├── customer.py        # Customer / Supplier core model
+│       ├── user.py            # User and authentication model
+│       ├── role.py            # RBAC role model
+│       ├── refresh_token.py   # Refresh token persistence
+│       └── audit_log.py       # Audit log persistence
+│
+├── scripts/
+│   └── etl/                            # Data adapters (legacy systems → core schema)
+│       ├── load_stg_products.py        # Load raw legacy products into staging
+│       ├── load_products_from_stg.py   # Promote staged products into core
+│       ├── load_stg_clients.py         # Load raw legacy clients into staging
+│       └── load_customers_from_stg.py  # Promote staged clients into core
+│
+└── .gitignore                 # Ignored files and secrets
+
 ```
 ---
 
