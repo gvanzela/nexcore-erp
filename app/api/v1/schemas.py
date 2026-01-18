@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional
+from pydantic import BaseModel, EmailStr, Field
+from typing import Optional, List
 from datetime import datetime
+from decimal import Decimal
 
 # =========================
 # Product Schemas
@@ -98,6 +99,65 @@ class CustomerOut(CustomerBase):
     active: bool
     created_at: datetime
     updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================
+# Order Items
+# ============================================================
+
+class OrderItemCreate(BaseModel):
+    product_id: int = Field(..., description="Product identifier")
+    quantity: Decimal = Field(..., gt=0, description="Quantity sold")
+    unit_price: Decimal = Field(..., ge=0, description="Unit sale price")
+    discount_amount: Optional[Decimal] = Field(None, ge=0, description="Discount applied to this item")
+    total_price: Decimal = Field(..., ge=0, description="Final total price for this item")
+    notes: Optional[str] = Field(None, description="Contextual sale notes (vehicle, plate, km, etc.)")
+
+
+class OrderItemResponse(OrderItemCreate):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================
+# Orders
+# ============================================================
+
+class OrderCreate(BaseModel):
+    external_id: Optional[str] = Field(None, description="External or legacy order identifier")
+    customer_id: int = Field(..., description="Customer who placed the order")
+    issued_at: datetime = Field(..., description="Order issue datetime")
+    status: str = Field(..., description="Order status (DRAFT, OPEN, CONFIRMED, CANCELED, CLOSED)")
+    total_amount: Decimal = Field(..., ge=0, description="Final total amount of the order")
+    discount_amount: Optional[Decimal] = Field(None, ge=0, description="Total discount applied to the order")
+    notes: Optional[str] = Field(None, description="General order notes")
+    items: List[OrderItemCreate] = Field(..., min_items=1, description="Order items")
+
+
+class OrderUpdate(BaseModel):
+    status: Optional[str] = Field(None, description="Updated order status")
+    notes: Optional[str] = Field(None, description="Updated order notes")
+    active: Optional[bool] = Field(None, description="Logical deletion flag")
+
+
+class OrderResponse(BaseModel):
+    id: int
+    external_id: Optional[str]
+    customer_id: int
+    issued_at: datetime
+    status: str
+    total_amount: Decimal
+    discount_amount: Optional[Decimal]
+    notes: Optional[str]
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+    items: List[OrderItemResponse]
 
     class Config:
         from_attributes = True
