@@ -82,6 +82,7 @@ class CustomerUpdate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     type: Optional[str] = None
+    active: Optional[bool] = None
 
 
 class CustomerOut(CustomerBase):
