@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from datetime import datetime
 
 from app.core.deps import get_db
 from app.models.order import Order
@@ -27,25 +28,51 @@ router = APIRouter(
 )
 
 
-# Order Listing Endpoint
+# Order Listing Endpoint with Filters
 @router.get("/", response_model=list[OrderResponse])
 def list_orders(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
+
+    # Optional filters
+    status: str | None = Query(None),
+    customer_id: int | None = Query(None),
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
+
     db: Session = Depends(get_db),
     current_user: User = Depends(require_min_role(10)),
 ):
     """
-    List orders.
+    List orders with optional filters.
 
-    Returns the most recent orders with their items.
-    This endpoint is mainly used to:
-    - discover order IDs
-    - show order history in the frontend
+    This endpoint supports:
+    - pagination (skip / limit)
+    - filtering by status
+    - filtering by customer
+    - filtering by creation date range
+
+    It is designed to be the single entry point
+    for order listing in the system.
     """
 
+    query = db.query(Order)
+
+    # Apply filters only if provided
+    if status is not None:
+        query = query.filter(Order.status == status)
+
+    if customer_id is not None:
+        query = query.filter(Order.customer_id == customer_id)
+
+    if date_from is not None:
+        query = query.filter(Order.created_at >= date_from)
+
+    if date_to is not None:
+        query = query.filter(Order.created_at <= date_to)
+
     orders = (
-        db.query(Order)
+        query
         .order_by(Order.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -53,6 +80,7 @@ def list_orders(
     )
 
     return orders
+
 
 
 # Order Creation Endpoint
@@ -129,6 +157,42 @@ def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
         )
 
 
+# Get Order by ID Endpoint
+@router.get("/{order_id}", response_model=OrderResponse)
+def get_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_min_role(10))
+    # ROLE_USER = 10
+    # ROLE_MANAGER = 50
+    # ROLE_ADMIN = 100
+,
+):
+    """
+    Retrieve a single order by its ID.
+
+    This endpoint returns:
+    - order header
+    - all related order items
+
+    Used by the frontend to display order details.
+    """
+
+    # --------------------------------------------------
+    # 1) Fetch order with items
+    # --------------------------------------------------
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id)
+        .first()
+    )
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    return order
+
+
 # Order Update Endpoint
 @router.patch("/{order_id}", response_model=OrderResponse)
 def update_order(
@@ -182,40 +246,5 @@ def update_order(
         resource="orders",
         resource_id=order.id,
     )
-
-    return order
-
-# Get Order by ID Endpoint
-@router.get("/{order_id}", response_model=OrderResponse)
-def get_order(
-    order_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_min_role(10))
-    # ROLE_USER = 10
-    # ROLE_MANAGER = 50
-    # ROLE_ADMIN = 100
-,
-):
-    """
-    Retrieve a single order by its ID.
-
-    This endpoint returns:
-    - order header
-    - all related order items
-
-    Used by the frontend to display order details.
-    """
-
-    # --------------------------------------------------
-    # 1) Fetch order with items
-    # --------------------------------------------------
-    order = (
-        db.query(Order)
-        .filter(Order.id == order_id)
-        .first()
-    )
-
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
 
     return order
