@@ -5,7 +5,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.deps import get_db
 from app.models.order import Order
 from app.models.order_item import OrderItem
-from app.api.v1.schemas import OrderCreate, OrderResponse
+from app.api.v1.schemas import OrderCreate, OrderResponse, OrderUpdate
+from app.core.security import require_min_role
+from app.models.user import User
+from app.core.audit import log_action
 
 # router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -95,3 +98,60 @@ def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
             status_code=500,
             detail="Failed to create order",
         )
+
+
+# Order Update Endpoint
+@router.patch("/{order_id}", response_model=OrderResponse)
+def update_order(
+    order_id: int,
+    payload: OrderUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_min_role(10)),
+    # ROLE_USER = 10
+    # ROLE_MANAGER = 50
+    # ROLE_ADMIN = 100
+
+):
+    """
+    Partially update an existing order.
+
+    This endpoint allows updating only specific fields
+    (status, notes, active) without overwriting the entire record.
+    """
+
+    # --------------------------------------------------
+    # 1) Fetch order
+    # --------------------------------------------------
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    # --------------------------------------------------
+    # 2) Extract only provided fields (PATCH semantics)
+    # --------------------------------------------------
+    update_data = payload.dict(exclude_unset=True)
+
+    # --------------------------------------------------
+    # 3) Apply changes dynamically
+    # --------------------------------------------------
+    for field, value in update_data.items():
+        setattr(order, field, value)
+
+    # --------------------------------------------------
+    # 4) Persist changes
+    # --------------------------------------------------
+    db.commit()
+    db.refresh(order)
+
+    # --------------------------------------------------
+    # 5) Audit log
+    # --------------------------------------------------
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        action="UPDATE_ORDER",
+        resource="orders",
+        resource_id=order.id,
+    )
+
+    return order
