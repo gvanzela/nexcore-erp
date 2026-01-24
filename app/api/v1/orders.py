@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
 
@@ -56,7 +56,10 @@ def list_orders(
     for order listing in the system.
     """
 
-    query = db.query(Order)
+    query = (
+    db.query(Order)
+    .options(joinedload(Order.items))
+    )
 
     # Apply filters only if provided
     if status is not None:
@@ -183,6 +186,7 @@ def get_order(
     # --------------------------------------------------
     order = (
         db.query(Order)
+        .options(joinedload(Order.items))
         .filter(Order.id == order_id)
         .first()
     )
