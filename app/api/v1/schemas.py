@@ -112,7 +112,7 @@ class OrderItemCreate(BaseModel):
     product_id: int = Field(..., description="Product identifier")
     quantity: Decimal = Field(..., gt=0, description="Quantity sold")
     unit_price: Decimal = Field(..., ge=0, description="Unit sale price")
-    discount_amount: Optional[Decimal] = Field(None, ge=0, description="Discount applied to this item")
+    discount_amount: Optional[Decimal] = Field(None, description="Discount applied to this item")
     total_price: Decimal = Field(..., ge=0, description="Final total price for this item")
     notes: Optional[str] = Field(None, description="Contextual sale notes (vehicle, plate, km, etc.)")
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -27,6 +27,35 @@ router = APIRouter(
 )
 
 
+# Order Listing Endpoint
+@router.get("/", response_model=list[OrderResponse])
+def list_orders(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_min_role(10)),
+):
+    """
+    List orders.
+
+    Returns the most recent orders with their items.
+    This endpoint is mainly used to:
+    - discover order IDs
+    - show order history in the frontend
+    """
+
+    orders = (
+        db.query(Order)
+        .order_by(Order.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    return orders
+
+
+# Order Creation Endpoint
 @router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
     """
@@ -153,5 +182,40 @@ def update_order(
         resource="orders",
         resource_id=order.id,
     )
+
+    return order
+
+# Get Order by ID Endpoint
+@router.get("/{order_id}", response_model=OrderResponse)
+def get_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_min_role(10))
+    # ROLE_USER = 10
+    # ROLE_MANAGER = 50
+    # ROLE_ADMIN = 100
+,
+):
+    """
+    Retrieve a single order by its ID.
+
+    This endpoint returns:
+    - order header
+    - all related order items
+
+    Used by the frontend to display order details.
+    """
+
+    # --------------------------------------------------
+    # 1) Fetch order with items
+    # --------------------------------------------------
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id)
+        .first()
+    )
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
 
     return order
