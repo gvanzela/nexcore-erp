@@ -6,6 +6,7 @@ from datetime import datetime
 from app.core.deps import get_db
 from app.models.order import Order
 from app.models.order_item import OrderItem
+from app.models.inventory_movement import InventoryMovement
 from app.api.v1.schemas import OrderCreate, OrderResponse, OrderUpdate
 from app.core.security import require_min_role
 from app.models.user import User
@@ -136,6 +137,27 @@ def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
                 notes=item.notes,                # contextual sale notes (optional)
             )
             db.add(order_item)
+
+        # ------------------------------------------------------------
+        # 2.1) Register stock OUT for each sold item
+        # ------------------------------------------------------------
+        # Business rule:
+        # - Each order item generates exactly ONE inventory movement
+        # - We do not calculate stock here
+        # - We only register the physical event (stock leaving)
+
+        for item in payload.items:
+            movement = InventoryMovement(
+                product_id=item.product_id,
+                movement_type="OUT",
+                # Negative quantity because stock is leaving
+                quantity=-item.quantity,
+                occurred_at=order.issued_at,
+                # Traceability: this movement came from an order
+                source_entity="order",
+                source_id=str(order.id),
+            )
+            db.add(movement)
 
         # ------------------------------------------------------------
         # 3) Commit once: atomic persistence (order + items)
