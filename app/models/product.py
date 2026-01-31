@@ -25,6 +25,11 @@ class Product(Base):
     code = Column(String(50), unique=True, nullable=False)
 
     # -----------------------------------------------------
+    # Manufacturer code (or supplier code - optional)
+    # Comes from legacy Cd_Produto
+    manufacturer_code = Column(String(50), nullable=True)
+
+    # -----------------------------------------------------
     # Main display name
     # Example: "ABRACADEIRA"
     # -----------------------------------------------------

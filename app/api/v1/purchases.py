@@ -18,6 +18,7 @@ from fastapi import Depends
 
 from app.core.deps import get_db
 from app.models.inventory_movement import InventoryMovement
+from app.models.product import Product
 
 
 
@@ -149,3 +150,67 @@ def confirm_purchase_xml(
     db.commit()
 
     return {"status": "ok", "items_created": len(payload.items)}
+
+
+# ---------------------------------------------------------
+# Resolve a single XML item by linking it to an existing product
+# ---------------------------------------------------------
+
+class PurchaseResolveLinkPayload(BaseModel):
+    product_id: int
+    quantity: Decimal
+    manufacturer_code: str | None = None
+
+
+@router.post("/xml/resolve/link")
+def resolve_purchase_item_link(
+    payload: PurchaseResolveLinkPayload,
+    db: Session = Depends(get_db),
+):
+    """
+    Resolve a single XML item that was marked as `needs_review`.
+
+    What this endpoint DOES:
+    - Links the XML item to an existing product
+    - Optionally updates the product manufacturer_code
+    - Returns the item in a "resolved/matched" format
+
+    What this endpoint DOES NOT do:
+    - Does NOT create inventory movements
+    - Does NOT persist purchase data
+    - Does NOT store XML state
+
+    This endpoint exists only to support human decision
+    before calling /xml/confirm.
+    """
+
+    # -----------------------------------------------------
+    # 1) Load product
+    # -----------------------------------------------------
+    product = db.get(Product, payload.product_id)
+
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found"
+        )
+
+    # -----------------------------------------------------
+    # 2) Optionally update manufacturer_code
+    # -----------------------------------------------------
+    if payload.manufacturer_code:
+        product.manufacturer_code = payload.manufacturer_code
+        db.add(product)
+        db.commit()
+        db.refresh(product)
+
+    # -----------------------------------------------------
+    # 3) Return resolved item (frontend will assemble final list)
+    # -----------------------------------------------------
+    return {
+        "product_id": product.id,
+        "code": product.code,
+        "manufacturer_code": product.manufacturer_code,
+        "quantity": payload.quantity,
+        "status": "matched"
+    }

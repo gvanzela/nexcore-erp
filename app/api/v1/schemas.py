@@ -16,6 +16,7 @@ class ProductCreate(BaseModel):
     """
     code: str
     description: str
+    manufacturer_code: Optional[str] = None
 
 
 class ProductUpdate(BaseModel):
@@ -27,6 +28,7 @@ class ProductUpdate(BaseModel):
     """
     code: Optional[str] = None
     description: Optional[str] = None
+    manufacturer_code: Optional[str] = None
     active: Optional[bool] = None
 
 
@@ -39,6 +41,7 @@ class ProductOut(BaseModel):
     """
     id: int
     code: str
+    manufacturer_code: Optional[str] = None
     name: str
     short_name: str
     description: str
