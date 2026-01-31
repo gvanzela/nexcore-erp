@@ -35,55 +35,56 @@ Client / Swagger / Frontend
 
 ```text
 nexcore-erp/
-├── README.md                  # High-level project overview and architecture
-├── ROADMAP.md                 # Planned features, milestones and long-term vision
-├── DECISIONS.md               # Architectural Decision Records (ADR)
-├── docker-compose.yml         # Local infrastructure (PostgreSQL, services)
-├── alembic.ini                # Alembic configuration
-│
-├── alembic/
-│   ├── env.py                 # Alembic runtime environment and DB context
-│   └── versions/              # Database migration history (core + staging)
-│
+├── README.md            # Project overview, architecture, setup
+├── ROADMAP.md           # Completed work and next steps
+├── .gitignore           # Ignore env files and caches
+├── alembic.ini          # Alembic configuration
+├── docker-compose.yml   # Local PostgreSQL service
 ├── app/
-│   ├── main.py                # Application entrypoint (FastAPI bootstrap)
-│   │
+│   ├── main.py          # FastAPI app entrypoint
 │   ├── api/
-│   │   └── v1/                # Versioned API (contract stability)
-│   │       ├── __init__.py
-│   │       ├── health.py      # Health check endpoint
-│   │       ├── auth.py        # Authentication & token lifecycle
-│   │       ├── products.py    # Product CRUD endpoints (core domain)
-│   │       ├── customers.py   # Customer / Supplier endpoints
-│   │       ├── schemas.py     # Shared Pydantic schemas (request / response)
-│   │       └── schemas_auth.py# Auth-specific schemas
-│   │
+│   │   └── v1/
+│   │       ├── auth.py        # Auth: login, refresh, RBAC
+│   │       ├── customers.py  # Customer CRUD
+│   │       ├── products.py   # Product CRUD
+│   │       ├── orders.py     # Orders + inventory OUT
+│   │       ├── inventory.py  # Computed stock endpoints
+│   │       ├── purchases.py  # Purchase XML preview/confirm
+│   │       ├── health.py     # Health checks
+│   │       ├── schemas.py    # Pydantic schemas (core)
+│   │       └── schemas_auth.py # Auth schemas
 │   ├── core/
-│   │   ├── __init__.py
-│   │   ├── config.py          # Application settings and environment loading
-│   │   ├── database.py        # Database engine and session management
-│   │   ├── deps.py            # Dependency injection (DB, auth, RBAC)
-│   │   ├── security.py        # JWT, password hashing, auth helpers
-│   │   └── audit.py           # Centralized audit logging
-│   │
+│   │   ├── database.py  # SQLAlchemy engine / Base
+│   │   ├── deps.py      # FastAPI dependencies (get_db)
+│   │   ├── security.py  # JWT, password hashing, RBAC
+│   │   ├── audit.py     # Audit logging helper
+│   │   └── config.py    # Env-based settings
 │   └── models/
-│       ├── __init__.py
-│       ├── product.py         # Product core domain model
-│       ├── customer.py        # Customer / Supplier core model
-│       ├── user.py            # User and authentication model
-│       ├── role.py            # RBAC role model
-│       ├── refresh_token.py   # Refresh token persistence
-│       └── audit_log.py       # Audit log persistence
-│
-├── scripts/
-│   └── etl/                            # Data adapters (legacy systems → core schema)
-│       ├── load_stg_products.py        # Load raw legacy products into staging
-│       ├── load_products_from_stg.py   # Promote staged products into core
-│       ├── load_stg_clients.py         # Load raw legacy clients into staging
-│       └── load_customers_from_stg.py  # Promote staged clients into core
-│
-└── .gitignore                 # Ignored files and secrets
-
+│       ├── product.py            # Product entity
+│       ├── customer.py           # Customer / supplier
+│       ├── order.py              # Order header
+│       ├── order_item.py         # Order items
+│       ├── inventory_movement.py # Stock events (IN/OUT/ADJUST)
+│       ├── stg_record.py         # Universal staging table
+│       ├── user.py               # User entity
+│       ├── role.py               # RBAC roles
+│       ├── refresh_token.py      # Refresh tokens
+│       ├── audit_log.py          # Audit records
+│       └── __init__.py
+└── scripts/
+    ├── etl/
+    │   ├── load_stg_products.py            # Extract legacy products
+    │   ├── load_stg_clients.py             # Extract legacy customers
+    │   ├── load_stg_orders.py              # Extract legacy orders
+    │   ├── load_stg_inventory_initial.py   # Extract initial stock
+    │   ├── load_products_from_stg.py       # Promote products
+    │   ├── load_customers_from_stg.py      # Promote customers
+    │   ├── load_orders_from_stg.py         # Promote orders + items
+    │   └── load_inventory_from_stg.py      # Promote inventory movements
+    └── xml/
+        ├── read_nfe_xml.py        # Parse NF-e XML
+        ├── match_items_by_ean.py  # Match XML items to products
+        └── promote_purchase_in.py # Create inventory IN movements
 ```
 ---
 
