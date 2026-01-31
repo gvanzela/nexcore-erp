@@ -1,18 +1,40 @@
 import os
-import pyodbc
-import psycopg2
 import json
 import uuid
+import pyodbc
+import psycopg2
 from decimal import Decimal
 from datetime import datetime, date
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ---------------------------------------------------------
+# =========================================================
+# CONFIGURATION — CHANGE ONLY THIS BLOCK FOR NEXT STAGING
+# =========================================================
+
+SOURCE_SYSTEM = "cmsys"
+
+# Logical entity name inside staging (generic, not legacy table name)
+SOURCE_ENTITY = "products"
+
+# Legacy table to extract from
+LEGACY_QUERY = """
+    SELECT *
+    FROM dbo.CD_produto
+"""
+
+# Function that defines the business key (source_pk) for staging
+# IMPORTANT:
+# - Must uniquely identify one logical record
+# - Must be stable across reloads
+def build_source_pk(row: dict) -> str:
+    return str(row.get("Cd_Produto"))
+
+
+# =========================================================
 # Helper: make legacy values JSON-safe
-# SQL Server often returns Decimal, which JSON can't handle
-# ---------------------------------------------------------
+# =========================================================
 def json_safe(value):
     if isinstance(value, Decimal):
         return float(value)
@@ -21,105 +43,111 @@ def json_safe(value):
     return value
 
 
-
-# =========================================================
-# 1) CONNECT TO SQL SERVER (LEGACY SYSTEM)
-# =========================================================
-# We read data from the old ERP (cmsys)
-# No transformation here, only extraction
-mssql_conn = pyodbc.connect(
-    f"DRIVER={{{os.getenv('MSSQL_DRIVER')}}};"
-    f"SERVER={os.getenv('MSSQL_HOST')},{os.getenv('MSSQL_PORT')};"
-    f"DATABASE={os.getenv('MSSQL_DB')};"
-    f"UID={os.getenv('MSSQL_USER')};"
-    f"PWD={os.getenv('MSSQL_PASSWORD')};"
-    "TrustServerCertificate=yes;"
-)
-mssql_cur = mssql_conn.cursor()
+def row_to_dict(cursor, row):
+    """
+    Convert a pyodbc row to a JSON-safe dict using cursor metadata.
+    """
+    cols = [c[0] for c in cursor.description]
+    out = {}
+    for i, col in enumerate(cols):
+        out[col] = json_safe(row[i])
+    return out
 
 
-# =========================================================
-# 2) CONNECT TO POSTGRES (NEXCORE ERP)
-# =========================================================
-# This is where staging data lives
-pg_conn = psycopg2.connect(os.getenv("DATABASE_URL"))
-pg_cur = pg_conn.cursor()
+def main():
+    # =========================================================
+    # 1) CONNECT TO SQL SERVER (LEGACY)
+    # =========================================================
+    mssql_conn = pyodbc.connect(
+        f"DRIVER={{{os.getenv('MSSQL_DRIVER')}}};"
+        f"SERVER={os.getenv('MSSQL_HOST')},{os.getenv('MSSQL_PORT')};"
+        f"DATABASE={os.getenv('MSSQL_DB')};"
+        f"UID={os.getenv('MSSQL_USER')};"
+        f"PWD={os.getenv('MSSQL_PASSWORD')};"
+        "TrustServerCertificate=yes;"
+    )
+    mssql_cur = mssql_conn.cursor()
 
-# Batch id allows us to track each import execution
-batch_id = str(uuid.uuid4())
+    # =========================================================
+    # 2) CONNECT TO POSTGRES (NEXCORE — STAGING)
+    # =========================================================
+    pg_conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    pg_cur = pg_conn.cursor()
 
+    batch_id = str(uuid.uuid4())
 
-# =========================================================
-# 3) READ ALL PRODUCTS FROM LEGACY TABLE
-# =========================================================
-# We select EVERYTHING from legacy.
-# Business fields are extracted manually.
-mssql_cur.execute("""
-SELECT *
-FROM dbo.CD_Produto
-""")
+    try:
+        # =========================================================
+        # 3) EXTRACT — LEGACY INVENTORY (RAW)
+        # =========================================================
+        # No transformations, no assumptions.
+        # This step only mirrors legacy rows into staging.
+        mssql_cur.execute(LEGACY_QUERY)
+        legacy_rows = mssql_cur.fetchall()
+        rows = [row_to_dict(mssql_cur, r) for r in legacy_rows]
 
-columns = [c[0] for c in mssql_cur.description]
+        # =========================================================
+        # 4) LOAD — INSERT / UPSERT INTO stg_records
+        # =========================================================
+        insert_sql = """
+            INSERT INTO stg_records (
+                source_system,
+                source_entity,
+                source_pk,
+                raw_payload,
+                status,
+                loaded_at,
+                promoted_at,
+                error_reason
+            )
+            VALUES (%s, %s, %s, %s::jsonb, %s, NOW(), NULL, NULL)
+            ON CONFLICT (source_system, source_entity, source_pk)
+            DO UPDATE SET
+                raw_payload = EXCLUDED.raw_payload,
+                status = 'NEW',
+                loaded_at = NOW(),
+                promoted_at = NULL,
+                error_reason = NULL
+        """
 
+        inserted = 0
 
-# =========================================================
-# 4) LOAD INTO STAGING TABLE (stg_products)
-# =========================================================
-for row in mssql_cur.fetchall():
+        for row in rows:
+            source_pk = build_source_pk(row)
+            if not source_pk:
+                # Broken legacy row — ignore silently
+                continue
 
-    # Full legacy row → JSON
-    raw_payload = {
-        k: json_safe(v)
-        for k, v in zip(columns, row)
-    }
+            pg_cur.execute(
+                insert_sql,
+                (
+                    SOURCE_SYSTEM,
+                    SOURCE_ENTITY,
+                    source_pk,
+                    json.dumps(row, ensure_ascii=False),
+                    "NEW",
+                ),
+            )
+            inserted += 1
 
-    # Manual extraction of useful fields
-    legacy_empresa = raw_payload.get("Cd_Empresa")
-    legacy_code = raw_payload.get("Cd_Produto")
-
-    pg_cur.execute("""
-        INSERT INTO stg_products (
-            source_system,
-            legacy_empresa_id,
-            legacy_product_code,
-
-            code,
-            name,
-            short_name,
-            description,
-            barcode,
-            unit_sale,
-            unit_purchase,
-            purchase_multiple,
-
-            raw_payload,
-            import_batch_id
+        pg_conn.commit()
+        print(
+            f"[OK] Products staging loaded | "
+            f"batch_id={batch_id} | rows={inserted}"
         )
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        ON CONFLICT (source_system, legacy_empresa_id, legacy_product_code)
-        DO NOTHING;
-    """, (
-        "cmsys",
-        str(legacy_empresa),
-        str(legacy_code),
 
-        # Curated fields (used now)
-        str(legacy_code),
-        raw_payload.get("Ds_Produto"),
-        raw_payload.get("Ds_Produto_Reduzida"),
-        raw_payload.get("Ds_Texto_Explicativo"),
-        raw_payload.get("CD_EAN_Produto"),
-        raw_payload.get("Cd_Unidade_Medida_Venda"),
-        raw_payload.get("Cd_Unidade_Medida_Compra"),
-        raw_payload.get("Qt_Multiplo_Compra"),
+    except Exception:
+        pg_conn.rollback()
+        raise
 
-        # Full legacy snapshot
-        json.dumps(raw_payload),
+    finally:
+        try:
+            pg_cur.close()
+            pg_conn.close()
+        finally:
+            mssql_cur.close()
+            mssql_conn.close()
 
-        batch_id
-    ))
 
-# Persist changes
-pg_conn.commit()
-
-print("Products staged successfully. Batch:", batch_id)
+if __name__ == "__main__":
+    main()
