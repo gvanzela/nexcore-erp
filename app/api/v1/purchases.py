@@ -17,12 +17,19 @@ from sqlalchemy.orm import Session
 from fastapi import Depends
 
 from app.core.deps import get_db
+from app.core.security import get_current_user
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
+from app.models.user import User
+from app.api.v1.schemas import (
+                        PurchaseConfirmPayload, 
+                        PurchaseResolveLinkPayload,
+                        PurchaseResolveCreateProductPayload,
+                        PurchaseResolveCreateProductPayload
+)
+from app.core.audit import log_action
 
-
-
-
+# Router for purchase-related endpoints
 router = APIRouter(
     prefix="/api/v1/purchases", 
     tags=["purchases"]
@@ -112,20 +119,11 @@ async def preview_purchase_xml(file: UploadFile = File(...)):
 
 
 # Purchase XML confirm endpoint
-class PurchaseItemConfirm(BaseModel):
-    product_id: int
-    quantity: Decimal
-
-
-class PurchaseConfirmPayload(BaseModel):
-    source_id: str
-    items: List[PurchaseItemConfirm]
-
-
 @router.post("/xml/confirm")
 def confirm_purchase_xml(
     payload: PurchaseConfirmPayload,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user), # Requires authentication
 ):
     """
     Confirm a purchase XML after preview.
@@ -155,62 +153,128 @@ def confirm_purchase_xml(
 # ---------------------------------------------------------
 # Resolve a single XML item by linking it to an existing product
 # ---------------------------------------------------------
-
-class PurchaseResolveLinkPayload(BaseModel):
-    product_id: int
-    quantity: Decimal
-    manufacturer_code: str | None = None
-
-
 @router.post("/xml/resolve/link")
 def resolve_purchase_item_link(
     payload: PurchaseResolveLinkPayload,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user), # Requires authentication
 ):
     """
-    Resolve a single XML item that was marked as `needs_review`.
+    Links a single XML purchase item to an existing product.
 
-    What this endpoint DOES:
-    - Links the XML item to an existing product
-    - Optionally updates the product manufacturer_code
-    - Returns the item in a "resolved/matched" format
-
-    What this endpoint DOES NOT do:
-    - Does NOT create inventory movements
-    - Does NOT persist purchase data
-    - Does NOT store XML state
-
-    This endpoint exists only to support human decision
-    before calling /xml/confirm.
+    This endpoint is used ONLY for human-assisted resolution
+    before final confirmation (/xml/confirm).
     """
 
     # -----------------------------------------------------
-    # 1) Load product
+    # 1) Load target product
     # -----------------------------------------------------
     product = db.get(Product, payload.product_id)
-
     if not product:
-        raise HTTPException(
-            status_code=404,
-            detail="Product not found"
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # -----------------------------------------------------
+    # 2) Apply optional, non-destructive updates
+    # - manufacturer_code: can be updated if provided
+    # - barcode: only filled if product has none
+    # -----------------------------------------------------
+    should_commit = False
+
+    if payload.manufacturer_code and product.manufacturer_code != payload.manufacturer_code:
+        product.manufacturer_code = payload.manufacturer_code
+        should_commit = True
+
+    if payload.barcode and not product.barcode:
+        product.barcode = payload.barcode
+        should_commit = True
+
+
+    # Persist only if something actually changed
+    if should_commit:
+        action = "UPDATE_PRODUCT_XML"
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            action=action,
+            resource="product",
+            resource_id=product.id,
         )
 
-    # -----------------------------------------------------
-    # 2) Optionally update manufacturer_code
-    # -----------------------------------------------------
-    if payload.manufacturer_code:
-        product.manufacturer_code = payload.manufacturer_code
         db.add(product)
         db.commit()
         db.refresh(product)
 
     # -----------------------------------------------------
-    # 3) Return resolved item (frontend will assemble final list)
+    # 3) Return resolved/matched representation
+    # (frontend assembles final confirmation payload)
     # -----------------------------------------------------
     return {
         "product_id": product.id,
         "code": product.code,
         "manufacturer_code": product.manufacturer_code,
         "quantity": payload.quantity,
-        "status": "matched"
+        "status": "matched",
+    }
+
+
+# ---------------------------------------------------------
+# Resolve a single XML item by creating a new product
+# ---------------------------------------------------------
+@router.post("/xml/resolve/create-product")
+def resolve_purchase_item_create_product(
+    payload: PurchaseResolveCreateProductPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # Requires authentication
+):
+    """
+    Creates a new product from an XML item and marks it as resolved.
+
+    This endpoint:
+    - Creates a Product using XML data
+    - Does NOT create inventory movements
+    - Returns the item as 'matched' for later confirmation
+    """
+
+    # Bootstrap fields
+    name = payload.description
+    short_name = payload.description[:50]
+
+    # -----------------------------------------------------
+    # 1) Create product from XML data
+    # -----------------------------------------------------
+    product = Product(
+        code=payload.code or f"XML-{datetime.now().strftime('%Y%m%d%H%M%S')}", # fallback code
+        name=name,
+        short_name=short_name,
+        description=payload.description,
+        manufacturer_code=payload.manufacturer_code,
+        barcode=payload.barcode,
+        active=True,
+    )
+
+
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+
+    # -----------------------------------------------------
+    # 2) Audit log
+    # -----------------------------------------------------
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        action="CREATE_PRODUCT_XML",
+        resource="product",
+        resource_id=product.id,
+    )
+
+    # -----------------------------------------------------
+    # 3) Return resolved/matched representation
+    # -----------------------------------------------------
+    return {
+        "product_id": product.id,
+        "code": product.code,
+        "manufacturer_code": product.manufacturer_code,
+        "quantity": payload.quantity,
+        "status": "matched",
     }
