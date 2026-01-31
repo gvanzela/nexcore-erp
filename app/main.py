@@ -7,6 +7,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.customers import router as customers_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.inventory import router as inventory_router
+from app.api.v1.purchases import router as purchases_router
 
 
 # Create FastAPI application instance
@@ -30,3 +31,5 @@ app.include_router(orders_router)
 # Inventory routes
 app.include_router(inventory_router)
 
+# Purchase routes
+app.include_router(purchases_router)
