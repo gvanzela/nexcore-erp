@@ -33,7 +33,10 @@ from app.models.refresh_token import RefreshToken
 # Auth router
 # - Prefix: /auth
 # - Handles authentication-related endpoints only
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(
+    prefix="/api/v1/auth", 
+    tags=["auth"]
+)
 
 
 @router.post("/login", response_model=Token)
