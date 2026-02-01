@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from datetime import datetime, timezone
 
 from app.core.deps import get_db
 from app.models.inventory_movement import InventoryMovement
@@ -149,4 +150,55 @@ def list_inventory_movements(
         }
         for m, p in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# CREATE Inventory Manual Adjustment
+# ---------------------------------------------------------------------------
+@router.post("/adjustments")
+def create_inventory_adjustment(
+    product_id: int,
+    counted_quantity: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Create a manual inventory adjustment.
+
+    The user provides the REAL counted stock.
+    The backend calculates the delta and stores it
+    as an ADJUST inventory movement.
+    """
+
+    # 1. Calculate current stock (source of truth)
+    current_stock = (
+        db.query(func.coalesce(func.sum(InventoryMovement.quantity), 0))
+        .filter(InventoryMovement.product_id == product_id)
+        .scalar()
+    )
+
+    # 2. Calculate delta (difference between counted and current)
+    delta = counted_quantity - current_stock
+
+    # 3. Create adjustment movement (no direct stock update)
+    movement = InventoryMovement(
+        product_id=product_id,
+        quantity=delta,
+        movement_type="ADJUST",
+        occurred_at=datetime.now(timezone.utc),
+        source_entity="MANUAL_ADJUSTMENT",
+        source_id=f"MANUAL_{datetime.now(timezone.utc).isoformat()}",
+    )
+
+    db.add(movement)
+    db.commit()
+    db.refresh(movement)
+
+    # 4. Return clear result for UI
+    return {
+        "product_id": product_id,
+        "previous_stock": current_stock,
+        "counted_stock": counted_quantity,
+        "adjustment": delta,
+        "movement_id": movement.id,
+    }
 
