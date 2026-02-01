@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from fastapi import Query, Depends
+from datetime import datetime
 
 from app.core.database import SessionLocal
 from app.models.product import Product
@@ -47,7 +48,13 @@ def create_product(
     """
 
     # Create Product ORM object from request payload
-    product = Product(**payload.dict())
+    data = payload.model_dump()
+
+    # Ensure unique business code
+    data["code"] = payload.code or f"PRD-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+
+    # Create Product instance
+    product = Product(**data)
 
     # Persist entity
     db.add(product)

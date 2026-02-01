@@ -14,9 +14,13 @@ class ProductCreate(BaseModel):
     - Required fields only
     - Used by POST /api/v1/products
     """
-    code: str
+    name: str
+    code: Optional[str] = None
     description: str
+    unit: str
     manufacturer_code: Optional[str] = None
+    barcode: Optional[str] = None
+
 
 
 class ProductUpdate(BaseModel):
