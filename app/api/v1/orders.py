@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import or_
 from datetime import datetime
 
 from app.core.deps import get_db
@@ -11,6 +12,8 @@ from app.api.v1.schemas import OrderCreate, OrderResponse, OrderUpdate
 from app.core.security import require_min_role
 from app.models.user import User
 from app.core.audit import log_action
+from app.models.customer import Customer
+
 
 # router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -30,16 +33,33 @@ router = APIRouter(
 
 
 # Order Listing Endpoint with Filters
+# imports necessários
+from fastapi import Query, Depends
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
+from datetime import datetime
+
+from app.core.deps import get_db
+from app.core.security import require_min_role
+from app.models.order import Order
+from app.models.customer import Customer
+from app.models.user import User
+
+# Order Listing Endpoint with Flexible Filters
 @router.get("/", response_model=list[OrderResponse])
 def list_orders(
+    # Pagination
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
 
-    # Optional filters
+    # Optional filters (mantidos)
     status: str | None = Query(None),
     customer_id: int | None = Query(None),
     date_from: datetime | None = Query(None),
     date_to: datetime | None = Query(None),
+
+    # NEW: flexible customer search (UX)
+    customer_search: str | None = Query(None),
 
     db: Session = Depends(get_db),
     current_user: User = Depends(require_min_role(10)),
@@ -47,22 +67,28 @@ def list_orders(
     """
     List orders with optional filters.
 
-    This endpoint supports:
-    - pagination (skip / limit)
-    - filtering by status
-    - filtering by customer
-    - filtering by creation date range
-
-    It is designed to be the single entry point
-    for order listing in the system.
+    - customer_id: exact (technical / internal)
+    - customer_search: free text (customer name / document)
+    - status: exact
+    - date_from / date_to: range
     """
 
+    # -----------------------------------------------------
+    # Base query
+    # - items: eager load (avoid N+1 on response)
+    # - customer: eager load (needed for customer_name in response)
+    # -----------------------------------------------------
     query = (
-    db.query(Order)
-    .options(joinedload(Order.items))
+        db.query(Order)
+        .options(
+            joinedload(Order.items),
+            joinedload(Order.customer),  # NEW
+        )
     )
 
-    # Apply filters only if provided
+    # -----------------------------------------------------
+    # Exact filters
+    # -----------------------------------------------------
     if status is not None:
         query = query.filter(Order.status == status)
 
@@ -75,6 +101,26 @@ def list_orders(
     if date_to is not None:
         query = query.filter(Order.created_at <= date_to)
 
+    # -----------------------------------------------------
+    # NEW: customer free-text search
+    # - Join ONLY for filtering
+    # -----------------------------------------------------
+    if customer_search:
+        ilike = f"%{customer_search}%"
+        query = (
+            query
+            .join(Customer, Order.customer_id == Customer.id)
+            .filter(
+                or_(
+                    Customer.name.ilike(ilike),
+                    Customer.document.ilike(ilike),
+                )
+            )
+        )
+
+    # -----------------------------------------------------
+    # Pagination + ordering
+    # -----------------------------------------------------
     orders = (
         query
         .order_by(Order.created_at.desc())
@@ -83,7 +129,15 @@ def list_orders(
         .all()
     )
 
+    # -----------------------------------------------------
+    # Inject derived field for frontend convenience
+    # -----------------------------------------------------
+    for order in orders:
+        order.customer_name = order.customer.name if order.customer else None
+
     return orders
+
+
 
 
 

@@ -156,6 +156,7 @@ class OrderResponse(BaseModel):
     id: int
     external_id: Optional[str]
     customer_id: int
+    customer_name: str | None = None
     issued_at: datetime
     status: str
     total_amount: Decimal

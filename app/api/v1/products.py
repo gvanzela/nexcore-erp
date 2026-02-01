@@ -4,13 +4,14 @@ from typing import List, Optional
 from fastapi import Query, Depends
 from datetime import datetime
 
-from app.core.database import SessionLocal
+from sqlalchemy import or_
+
+
 from app.models.product import Product
 from app.api.v1.schemas import (
                 ProductCreate, 
                 ProductOut, 
-                ProductUpdate, 
-                PurchaseResolveCreateProductPayload
+                ProductUpdate
 )
 from app.core.deps import get_db
 from app.core.security import get_current_user
@@ -80,9 +81,6 @@ def create_product(
 # Now the database session is injected by FastAPI.
 # The endpoint no longer creates or closes the DB connection manually.
 # ---------------------------------------------------------------------------
-
-from sqlalchemy import or_
-from fastapi import Query
 
 @router.get("", response_model=List[ProductOut])
 def list_products(
@@ -161,31 +159,31 @@ def get_product(
 # ---------------------------------------------------------------------------
 # READ (BY MANUFACTURER CODE)
 # ---------------------------------------------------------------------------
-@router.get("/by-manufacturer-code/{manufacturer_code}", response_model=ProductOut)
-def get_product(
-    manufacturer_code: str,
-    db: Session = Depends(get_db), # DB session injected here
-    current_user: User = Depends(get_current_user), # Requires authentication
-):
-    """
-    Retrieve a single product by its Manufacturer Code.
+# @router.get("/by-manufacturer-code/{manufacturer_code}", response_model=ProductOut)
+# def get_product(
+#     manufacturer_code: str,
+#     db: Session = Depends(get_db), # DB session injected here
+#     current_user: User = Depends(get_current_user), # Requires authentication
+# ):
+#     """
+#     Retrieve a single product by its Manufacturer Code.
 
-    - Searches the database for a product with the given Code
-    - Returns the product if found
-    - Raises 404 if the product does not exist
-    """
+#     - Searches the database for a product with the given Code
+#     - Returns the product if found
+#     - Raises 404 if the product does not exist
+#     """
 
-    # Query product by manufacturer code
-    product = (
-        db.query(Product)
-        .filter(Product.manufacturer_code == manufacturer_code)
-        .first()
-    )
+#     # Query product by manufacturer code
+#     product = (
+#         db.query(Product)
+#         .filter(Product.manufacturer_code == manufacturer_code)
+#         .first()
+#     )
 
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+#     if not product:
+#         raise HTTPException(status_code=404, detail="Product not found")
 
-    return product
+#     return product
 
 # ---------------------------------------------------------------------------
 # UPDATE (PARTIAL)
@@ -219,7 +217,7 @@ def update_product(
         raise HTTPException(status_code=404, detail="Product not found")
 
     # Apply only provided fields (PATCH behavior)
-    updates = payload.dict(exclude_unset=True)
+    updates = payload.model_dump(exclude_unset=True)
     for field, value in updates.items():
         setattr(product, field, value)
 

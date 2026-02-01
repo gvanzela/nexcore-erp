@@ -53,6 +53,9 @@ class Order(Base):
         comment="Customer who placed the order",
     )
 
+    customer = relationship("Customer")
+
+
     created_by = Column(
         BigInteger,
         ForeignKey("users.id"),
