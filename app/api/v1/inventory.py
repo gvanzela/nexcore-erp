@@ -52,8 +52,8 @@ def get_stock_balance(
 @router.get("/")
 def list_stock(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100), 
-    db: Session = Depends(get_db)   
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
 ):
     """
     List current stock balance for all products.
@@ -63,17 +63,29 @@ def list_stock(
 
     rows = (
         db.query(
-            InventoryMovement.product_id,
+            Product.id,
+            Product.name,
+            Product.manufacturer_code,
             func.coalesce(func.sum(InventoryMovement.quantity), 0).label("balance"),
         )
-        .group_by(InventoryMovement.product_id)
-        .offset(skip).limit(limit).all()
+        .join(InventoryMovement, InventoryMovement.product_id == Product.id)
+        .group_by(Product.id, Product.name, Product.manufacturer_code)
+        .order_by(Product.name)
+        .offset(skip)
+        .limit(limit)
+        .all()
     )
 
     return [
-        {"product_id": product_id, "balance": str(balance)}
-        for product_id, balance in rows
+        {
+            "product_id": product_id,
+            "product_name": name,
+            "manufacturer_code": manufacturer_code,
+            "balance": balance,
+        }
+        for product_id, name, manufacturer_code, balance in rows
     ]
+
 
 
 # ---------------------------------------------------------------------------
