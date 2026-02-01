@@ -22,14 +22,13 @@ router = APIRouter(
 # Inventory Stock Balance Endpoint for a Product
 @router.get("/product/{product_id}")
 def get_stock_balance(
-    product_id: int, 
-    db: Session = Depends(get_db)
+    product_id: int,
+    db: Session = Depends(get_db),
 ):
     """
-    Read-only stock balance.
+    Read-only stock balance for a single product.
 
-    Stock is NOT stored as a column.
-    Stock is computed as the sum of all inventory movements for a product.
+    Stock is computed as the sum of inventory movements.
     """
 
     balance = (
@@ -38,9 +37,15 @@ def get_stock_balance(
         .scalar()
     )
 
-    # Optional: if you prefer to error when product never had movements,
-    # keep it simple for now and always return a number.
-    return {"product_id": product_id, "balance": str(balance)}
+    product = db.query(Product).get(product_id)
+
+    return {
+        "product_id": product_id,
+        "product_name": product.name if product else None,
+        "manufacturer_code": product.manufacturer_code if product else None,
+        "balance": balance,
+    }
+
 
 
 # Inventory Stock Listing Endpoint
