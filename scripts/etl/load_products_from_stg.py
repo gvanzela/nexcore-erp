@@ -28,16 +28,15 @@ def main():
             FROM stg_records
             WHERE source_system = %s
             AND source_entity = %s
-            AND status = 'NEW'
         """, (SOURCE_SYSTEM, SOURCE_ENTITY))
 
         rows = cur.fetchall()
 
         for stg_id, source_pk, payload in rows:
 
-            # Extract EAN from legacy payload
-            ean = payload.get("Cd_EAN_Produto")
-            if not ean:
+            # Extract manufacturer_code from legacy payload
+            manufacturer_code = payload.get("Cd_Fabricante")
+            if not manufacturer_code:
                 continue
 
             # Resolve product in core using legacy business key
@@ -55,10 +54,10 @@ def main():
             cur.execute(
                 """
                 UPDATE products
-                SET barcode = %s
+                SET manufacturer_code = %s
                 WHERE id = %s
                 """,
-                (str(ean), product_id),
+                (str(manufacturer_code), product_id),
             )
 
             # Mark staging row as promoted
@@ -72,7 +71,7 @@ def main():
                 (stg_id,),
             )
         pg.commit()
-        print("[OK] Products EAN promoted successfully")
+        print("[OK] Products Manufacurer Code promoted successfully")
 
     except Exception as exc:
         pg.rollback()

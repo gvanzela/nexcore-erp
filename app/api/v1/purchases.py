@@ -24,7 +24,6 @@ from app.models.user import User
 from app.api.v1.schemas import (
                         PurchaseConfirmPayload, 
                         PurchaseResolveLinkPayload,
-                        PurchaseResolveCreateProductPayload,
                         PurchaseResolveCreateProductPayload
 )
 from app.core.audit import log_action
@@ -100,12 +99,15 @@ async def preview_purchase_xml(file: UploadFile = File(...)):
         # - show matched items directly
         # - ask user to resolve needs_review items
         return {
-            "matched": matched,
-            "needs_review": needs_review,
-            "summary": {
-                "total_items": len(items),
-                "matched": len(matched),
-                "needs_review": len(needs_review),
+            "status": "ok",
+            "data": {
+                "matched": matched,
+                "needs_review": needs_review,
+                "summary": {
+                    "total_items": len(items),
+                    "matched": len(matched),
+                    "needs_review": len(needs_review),
+                }
             }
         }
 
@@ -133,7 +135,21 @@ def confirm_purchase_xml(
     - Generates IN inventory movements
     - Persists stock changes atomically
     """
+    
+    # Basic validation
+    if not payload.items:
+        raise HTTPException(status_code=400, detail="No items to confirm")
 
+    for item in payload.items:
+        if item.quantity <= 0:
+            raise HTTPException(status_code=400, detail="Quantity must be greater than zero")
+
+        product = db.get(Product, item.product_id)
+        if not product:
+            raise HTTPException(status_code=400, detail=f"Invalid product_id: {item.product_id}")
+
+    
+    # Process each confirmed item
     for item in payload.items:
         movement = InventoryMovement(
             product_id=item.product_id,
@@ -147,7 +163,12 @@ def confirm_purchase_xml(
 
     db.commit()
 
-    return {"status": "ok", "items_created": len(payload.items)}
+    return {
+        "status": "ok",
+        "data": {
+            "items_created": len(payload.items)
+        }
+    }
 
 
 # ---------------------------------------------------------
@@ -209,11 +230,12 @@ def resolve_purchase_item_link(
     # (frontend assembles final confirmation payload)
     # -----------------------------------------------------
     return {
-        "product_id": product.id,
-        "code": product.code,
-        "manufacturer_code": product.manufacturer_code,
-        "quantity": payload.quantity,
-        "status": "matched",
+        "status": "ok",
+        "data": {
+            "product_id": product.id,
+            "quantity": payload.quantity,
+            "status": "matched"
+        }
     }
 
 
@@ -238,20 +260,20 @@ def resolve_purchase_item_create_product(
     # Bootstrap fields
     name = payload.description
     short_name = payload.description[:50]
-
+    code = f"XML-{datetime.now().strftime('%Y%m%d%H%M%S')}", # fallback code
     # -----------------------------------------------------
     # 1) Create product from XML data
     # -----------------------------------------------------
     product = Product(
-        code=payload.code or f"XML-{datetime.now().strftime('%Y%m%d%H%M%S')}", # fallback code
+        code=code,
         name=name,
         short_name=short_name,
         description=payload.description,
+        unit=payload.unit,
         manufacturer_code=payload.manufacturer_code,
         barcode=payload.barcode,
         active=True,
     )
-
 
     db.add(product)
     db.commit()
@@ -272,9 +294,11 @@ def resolve_purchase_item_create_product(
     # 3) Return resolved/matched representation
     # -----------------------------------------------------
     return {
-        "product_id": product.id,
-        "code": product.code,
-        "manufacturer_code": product.manufacturer_code,
-        "quantity": payload.quantity,
-        "status": "matched",
+        "status": "ok",
+        "data": {
+            "product_id": product.id,
+            "code": product.code,
+            "manufacturer_code": product.manufacturer_code,
+            "status": "matched",
+        }
     }

@@ -43,6 +43,12 @@ def read_nfe_xml(path: str):
             # EAN / barcode used to match products
             "ean": prod.findtext("nfe:cEAN", default=None, namespaces=ns),
 
+            # Manufacturer code from supplier (cProd)
+            "manufacturer_code": prod.findtext("nfe:cProd", default=None, namespaces=ns),
+
+            # Unit of measure (commercial unit)
+            "unit": prod.findtext("nfe:uCom", default="", namespaces=ns),
+
             # Quantity sold (commercial unit)
             "quantity": prod.findtext("nfe:qCom", default="0", namespaces=ns),
 

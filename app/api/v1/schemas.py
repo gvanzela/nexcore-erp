@@ -39,12 +39,12 @@ class ProductOut(BaseModel):
     - Represents how Product is exposed externally
     - Hides internal ORM details
     """
-    id: int
-    code: str
+    id: Optional[int] = None
+    code: Optional[str] = None
     manufacturer_code: Optional[str] = None
-    name: str
-    short_name: str
-    description: str
+    name: Optional[str] = None
+    short_name: Optional[str] = None
+    description: Optional[str] = None
     active: bool
 
     class Config:
@@ -164,3 +164,35 @@ class OrderResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ============================================================
+# XML Purchase Import Schemas
+# ============================================================
+
+# Purchase XML confirm Schema
+class PurchaseItemConfirm(BaseModel):
+    product_id: int
+    quantity: Decimal
+
+
+class PurchaseConfirmPayload(BaseModel):
+    source_id: str
+    items: List[PurchaseItemConfirm]
+
+
+# xml purchase item resolve - link payload
+class PurchaseResolveLinkPayload(BaseModel):
+    product_id: int
+    quantity: Decimal
+    manufacturer_code: Optional[str] = None
+    barcode: Optional[str] = None  # EAN from XML
+
+
+# Payload schema for creating a new product from XML item
+class PurchaseResolveCreateProductPayload(BaseModel):
+    description: str
+    unit: str
+    #code: Optional[str] = None          # free/internal code
+    manufacturer_code: Optional[str] = None
+    barcode: Optional[str] = None       # EAN from XML
