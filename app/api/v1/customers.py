@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import or_
 
 from app.core.deps import get_db
 from app.core.security import get_current_user
@@ -75,12 +76,14 @@ def create_customer(
     return customer
 
 
-
 # ---------------------------------------------------------------------------
-# READ (LIST) with pagination and filters
+# READ (LIST) with pagination, filters and search
 # ---------------------------------------------------------------------------
 @router.get("", response_model=List[CustomerOut])
 def list_customers(
+    search: Optional[str] = Query(
+        None, description="Busca livre por nome, documento, email ou telefone"
+    ),
     active: Optional[bool] = Query(None),
     type: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
@@ -91,14 +94,28 @@ def list_customers(
     """
     Retrieve a list of customers.
 
-    - Supports filtering by:
-        - active status
-        - customer type (e.g. customer / supplier)
+    - Supports:
+        - Free text search (name, document, email, phone)
+        - Filtering by active status
+        - Filtering by customer type
     - Uses pagination (skip & limit)
     """
 
     query = db.query(Customer)
 
+    # Free search (UX-driven)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                Customer.name.ilike(like),
+                Customer.document.ilike(like),
+                Customer.email.ilike(like),
+                Customer.phone.ilike(like),
+            )
+        )
+
+    # Business filters
     if active is not None:
         query = query.filter(Customer.active == active)
 
