@@ -5,7 +5,12 @@ from fastapi import Query, Depends
 
 from app.core.database import SessionLocal
 from app.models.product import Product
-from app.api.v1.schemas import ProductCreate, ProductOut, ProductUpdate
+from app.api.v1.schemas import (
+                ProductCreate, 
+                ProductOut, 
+                ProductUpdate, 
+                PurchaseResolveCreateProductPayload
+)
 from app.core.deps import get_db
 from app.core.security import get_current_user
 from app.models.user import User
@@ -69,30 +74,56 @@ def create_product(
 # The endpoint no longer creates or closes the DB connection manually.
 # ---------------------------------------------------------------------------
 
+from sqlalchemy import or_
+from fastapi import Query
+
 @router.get("", response_model=List[ProductOut])
 def list_products(
     active: Optional[bool] = Query(None),
+    search: Optional[str] = Query(None),
+    barcode: Optional[str] = Query(None),
+    manufacturer_code: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),  # DB session injected here
-    current_user: User = Depends(get_current_user), # Requires authentication
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Retrieve a list of products with optional filtering and pagination.
+    List products with optional filters.
 
-    - active: filter by active status (optional)
-    - skip: number of records to skip
-    - limit: max number of records to return (capped)
+    - search: free text (name / description)
+    - barcode: exact match (EAN)
+    - manufacturer_code: exact match
     """
-    # Base query
+
     query = db.query(Product)
 
-    # Optional filter
+    # Filter by active flag
     if active is not None:
         query = query.filter(Product.active == active)
 
+    # Free text search (case-insensitive)
+    if search:
+        ilike = f"%{search}%"
+        query = query.filter(
+            or_(
+                Product.name.ilike(ilike),
+                Product.description.ilike(ilike),
+                Product.manufacturer_code.ilike(ilike),
+            )
+        )
+
+    # Exact barcode match
+    if barcode:
+        query = query.filter(Product.barcode == barcode)
+
+    # Exact manufacturer code match
+    if manufacturer_code:
+        query = query.filter(Product.manufacturer_code == manufacturer_code)
+
     # Pagination
     return query.offset(skip).limit(limit).all()
+
 
 # ---------------------------------------------------------------------------
 # READ (BY ID)
@@ -113,6 +144,36 @@ def get_product(
 
     # Query product by primary key
     product = db.get(Product, product_id)
+
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    return product
+
+
+# ---------------------------------------------------------------------------
+# READ (BY MANUFACTURER CODE)
+# ---------------------------------------------------------------------------
+@router.get("/by-manufacturer-code/{manufacturer_code}", response_model=ProductOut)
+def get_product(
+    manufacturer_code: str,
+    db: Session = Depends(get_db), # DB session injected here
+    current_user: User = Depends(get_current_user), # Requires authentication
+):
+    """
+    Retrieve a single product by its Manufacturer Code.
+
+    - Searches the database for a product with the given Code
+    - Returns the product if found
+    - Raises 404 if the product does not exist
+    """
+
+    # Query product by manufacturer code
+    product = (
+        db.query(Product)
+        .filter(Product.manufacturer_code == manufacturer_code)
+        .first()
+    )
 
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
