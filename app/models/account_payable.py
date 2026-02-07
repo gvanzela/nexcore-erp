@@ -37,3 +37,4 @@ class AccountPayable(Base):
 
     # Standard timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    paid_at = Column(DateTime(timezone=True), nullable=True)

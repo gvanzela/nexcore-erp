@@ -1,5 +1,5 @@
 from typing import List, Optional
-
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -78,3 +78,34 @@ def list_payables(
         query = query.filter(AccountPayable.supplier_id == supplier_id)
 
     return query.order_by(AccountPayable.created_at.desc()).offset(skip).limit(limit).all()
+
+
+# ---------------------------------------------------------------------------
+# PAY Accounts Payable
+# ---------------------------------------------------------------------------
+@router.post("/{payable_id}/pay", response_model=AccountPayableOut)
+def pay_payable(
+    payable_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Mark an accounts payable as PAID.
+
+    MVP:
+    - Full payment only
+    - No installments
+    """
+
+    payable = db.get(AccountPayable, payable_id)
+    if not payable:
+        raise HTTPException(status_code=404, detail="Payable not found")
+
+    if payable.status == "PAID":
+        raise HTTPException(status_code=400, detail="Payable already paid")
+
+    payable.status = "PAID"
+    payable.paid_at = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(payable)
+    return payable
