@@ -34,57 +34,74 @@ Client / Swagger / Frontend
 ## Project Structure
 
 ```text
+
 nexcore-erp/
-├── README.md            # Project overview, architecture, setup
-├── ROADMAP.md           # Completed work and next steps
-├── .gitignore           # Ignore env files and caches
-├── alembic.ini          # Alembic configuration
-├── docker-compose.yml   # Local PostgreSQL service
+├── README.md                 # High-level project overview, architecture, and setup
+├── ROADMAP.md                # Product and technical roadmap
+├── .gitignore                # Ignore rules for env files, cache, and local artifacts
+├── alembic.ini               # Alembic migration configuration
+├── docker-compose.yml        # Local PostgreSQL container definition
+├── Dockerfile                # FastAPI application container build
+├── requirements.txt          # Python dependencies
+│
 ├── app/
-│   ├── main.py          # FastAPI app entrypoint
+│   ├── main.py               # FastAPI bootstrap and API router registration
 │   ├── api/
 │   │   └── v1/
-│   │       ├── auth.py        # Auth: login, refresh, RBAC
-│   │       ├── customers.py  # Customer CRUD
-│   │       ├── products.py   # Product CRUD
-│   │       ├── orders.py     # Orders + inventory OUT
-│   │       ├── inventory.py  # Computed stock endpoints
-│   │       ├── purchases.py  # Purchase XML preview/confirm
-│   │       ├── health.py     # Health checks
-│   │       ├── schemas.py    # Pydantic schemas (core)
-│   │       └── schemas_auth.py # Auth schemas
+│   │       ├── __init__.py           # API v1 namespace marker
+│   │       ├── auth.py               # Authentication and token lifecycle endpoints
+│   │       ├── customers.py          # Customers/Suppliers CRUD and search endpoints
+│   │       ├── health.py             # Health check and DB connectivity endpoint
+│   │       ├── inventory.py          # Computed inventory balance and listings
+│   │       ├── orders.py             # Orders CRUD and stock OUT movements
+│   │       ├── payables.py            # Accounts Payable (purchase-based)
+│   │       ├── products.py            # Product catalog CRUD endpoints
+│   │       ├── purchases.py           # NF-e XML preview and confirm flow
+│   │       ├── schemas.py             # Shared Pydantic schemas (core entities)
+│   │       ├── schemas_auth.py        # Auth request/response schemas
+│   │       └── schemas_payables.py    # Accounts Payable schemas
+│   │
 │   ├── core/
-│   │   ├── database.py  # SQLAlchemy engine / Base
-│   │   ├── deps.py      # FastAPI dependencies (get_db)
-│   │   ├── security.py  # JWT, password hashing, RBAC
-│   │   ├── audit.py     # Audit logging helper
-│   │   └── config.py    # Env-based settings
+│   │   ├── __init__.py        # Core utilities namespace
+│   │   ├── audit.py           # Audit log helper functions
+│   │   ├── config.py          # Environment and settings loader
+│   │   ├── database.py        # SQLAlchemy engine and Base definition
+│   │   ├── deps.py            # Dependency injection (DB session lifecycle)
+│   │   └── security.py        # Password hashing, JWT, RBAC, refresh tokens
+│   │
 │   └── models/
-│       ├── product.py            # Product entity
-│       ├── customer.py           # Customer / supplier
-│       ├── order.py              # Order header
-│       ├── order_item.py         # Order items
-│       ├── inventory_movement.py # Stock events (IN/OUT/ADJUST)
-│       ├── stg_record.py         # Universal staging table
-│       ├── user.py               # User entity
-│       ├── role.py               # RBAC roles
-│       ├── refresh_token.py      # Refresh tokens
-│       ├── audit_log.py          # Audit records
-│       └── __init__.py
+│       ├── __init__.py                # Centralized ORM model exports
+│       ├── account_payable.py         # Accounts Payable ORM model
+│       ├── audit_log.py               # Audit log ORM model
+│       ├── customer.py                # Customer/Supplier ORM model
+│       ├── inventory_movement.py      # Inventory movement ledger model
+│       ├── order.py                   # Order header ORM model
+│       ├── order_item.py              # Order line-item ORM model
+│       ├── product.py                 # Product catalog ORM model
+│       ├── refresh_token.py           # Refresh token persistence
+│       ├── role.py                    # RBAC role model
+│       ├── stg_record.py              # Universal staging table model
+│       └── user.py                    # User and authentication model
+│
 └── scripts/
     ├── etl/
-    │   ├── load_stg_products.py            # Extract legacy products
-    │   ├── load_stg_clients.py             # Extract legacy customers
-    │   ├── load_stg_orders.py              # Extract legacy orders
-    │   ├── load_stg_inventory_initial.py   # Extract initial stock
-    │   ├── load_products_from_stg.py       # Promote products
-    │   ├── load_customers_from_stg.py      # Promote customers
-    │   ├── load_orders_from_stg.py         # Promote orders + items
-    │   └── load_inventory_from_stg.py      # Promote inventory movements
+    │   ├── load_customers_from_stg.py        # Promote staged customers into core
+    │   ├── load_inventory_from_stg.py        # Convert staged inventory into movements
+    │   ├── load_missing_suppliers_from_stg.py# Insert missing suppliers from staging
+    │   ├── load_orders_from_stg.py           # Promote staged orders into core orders
+    │   ├── load_products_from_stg.py         # Promote staged products into catalog
+    │   ├── load_stg_clients.py               # Extract legacy clients into staging
+    │   ├── load_stg_inventory_initial.py     # Initial legacy inventory snapshot
+    │   ├── load_stg_orders.py                # Extract legacy orders into staging
+    │   ├── load_stg_products.py              # Extract legacy products into staging
+    │   ├── load_stg_suppliers.py             # Extract legacy suppliers into staging
+    │   └── load_suppliers_from_stg.py        # Normalize supplier role in customers
+    │
     └── xml/
-        ├── read_nfe_xml.py        # Parse NF-e XML
-        ├── match_items_by_ean.py  # Match XML items to products
-        └── promote_purchase_in.py # Create inventory IN movements
+        ├── match_items_by_ean.py      # Match NF-e items to products by barcode/EAN
+        ├── promote_purchase_in.py     # Create inventory IN movements from purchases
+        └── read_nfe_xml.py            # NF-e XML parsing and normalization
+
 ```
 ---
 
