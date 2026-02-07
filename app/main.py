@@ -9,6 +9,7 @@ from app.api.v1.orders import router as orders_router
 from app.api.v1.inventory import router as inventory_router
 from app.api.v1.purchases import router as purchases_router
 from app.api.v1.payables import router as payables_router
+from app.api.v1.receivables import router as receivables_router
 
 # Create FastAPI application instance
 app = FastAPI(title=settings.app_name)
@@ -36,3 +37,7 @@ app.include_router(purchases_router)
 
 # Payables routes
 app.include_router(payables_router)
+
+# Receivables routes
+app.include_router(receivables_router)
+

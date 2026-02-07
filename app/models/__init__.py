@@ -7,3 +7,6 @@ from .customer import Customer
 from .stg_record import StgRecord
 from .order import Order
 from .order_item import OrderItem
+from .inventory_movement import InventoryMovement
+from .account_payable import AccountPayable
+from .account_receivable import AccountReceivable

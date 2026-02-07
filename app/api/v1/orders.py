@@ -13,7 +13,7 @@ from app.core.security import require_min_role
 from app.models.user import User
 from app.core.audit import log_action
 from app.models.customer import Customer
-
+from app.models.account_receivable import AccountReceivable
 
 # router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -212,6 +212,19 @@ def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
                 source_id=str(order.id),
             )
             db.add(movement)
+
+        # ------------------------------------------------------------
+        # 2.2) Create Accounts Receivable (1 order -> 1 receivable)
+        # ------------------------------------------------------------
+        receivable = AccountReceivable(
+            customer_id=order.customer_id,
+            source_entity="ORDER",
+            source_id=str(order.id),
+            amount=order.total_amount,
+            due_date=order.issued_at.date(),  # MVP: same day (can evolve later)
+            status="OPEN",
+        )
+        db.add(receivable)
 
         # ------------------------------------------------------------
         # 3) Commit once: atomic persistence (order + items)
