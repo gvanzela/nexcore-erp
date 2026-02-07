@@ -147,6 +147,22 @@ def confirm_purchase_xml(
                 detail=f"Invalid product_id: {item.product_id}",
             )
 
+    # Check if this purchase XML has already been confirmed (idempotency)
+    exists = (
+        db.query(AccountPayable)
+        .filter(
+            AccountPayable.source_entity == "PURCHASE",
+            AccountPayable.source_id == payload.source_id,
+        )
+        .first()
+    )
+
+    if exists:
+        raise HTTPException(
+            status_code=409,
+            detail="This purchase XML has already been confirmed",
+        )
+
     # Simple supplier validation (existence + type)
     supplier = db.get(Customer, payload.supplier_id)
     if not supplier:
