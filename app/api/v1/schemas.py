@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 
 # =========================
@@ -175,15 +175,26 @@ class OrderResponse(BaseModel):
 # XML Purchase Import Schemas
 # ============================================================
 
-# Purchase XML confirm Schema
+# Purchase XML confirm schemas
 class PurchaseItemConfirm(BaseModel):
     product_id: int
     quantity: Decimal
 
 
 class PurchaseConfirmPayload(BaseModel):
+    # Purchase identity (NF-e)
     source_id: str
+
+    # Supplier reference (Customer acting as Supplier)
+    supplier_id: int
+
+    # Financial data (used to create payable)
+    issue_date: date
+    total_amount: Decimal
+
+    # Confirmed items
     items: List[PurchaseItemConfirm]
+
 
 
 # xml purchase item resolve - link payload

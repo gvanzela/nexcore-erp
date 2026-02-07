@@ -26,6 +26,11 @@ from app.api.v1.schemas import (
                         PurchaseResolveLinkPayload,
                         PurchaseResolveCreateProductPayload
 )
+
+from app.models.account_payable import AccountPayable
+
+from app.models.customer import Customer
+
 from app.core.audit import log_action
 
 # Router for purchase-related endpoints
@@ -40,35 +45,21 @@ async def preview_purchase_xml(file: UploadFile = File(...)):
     """
     Preview a supplier purchase XML (NF-e).
 
-    This endpoint:
-    - Receives an XML file from the frontend
-    - Parses the XML (NF-e standard)
-    - Tries to match items with core products using EAN
-    - Returns a preview:
-        - matched items (auto-resolved)
-        - needs_review items (manual confirmation required)
-
-    IMPORTANT:
-    - This endpoint DOES NOT write anything to the database
-    - It is read-only and side-effect free
+    - Read-only
+    - No persistence
+    - Returns purchase header + item preview
     """
 
     # ---------------------------------------------------------
     # 1) Basic validation
     # ---------------------------------------------------------
     if not file.filename.lower().endswith(".xml"):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid file type. XML required."
-        )
+        raise HTTPException(status_code=400, detail="Invalid file type. XML required.")
 
     # ---------------------------------------------------------
     # 2) Save uploaded XML to a temporary file
     # ---------------------------------------------------------
-    # Why:
-    # - read_nfe_xml expects a file path
-    # - using a temp file avoids polluting the project
-    # - file is deleted automatically
+    # read_nfe_xml expects a file path
     with tempfile.NamedTemporaryFile(delete=False, suffix=".xml") as tmp:
         xml_bytes = await file.read()
         tmp.write(xml_bytes)
@@ -76,39 +67,42 @@ async def preview_purchase_xml(file: UploadFile = File(...)):
 
     try:
         # -----------------------------------------------------
-        # 3) Parse XML and extract raw items
+        # 3) Parse XML (purchase-level + items)
         # -----------------------------------------------------
-        # Output example per item:
-        # {
-        #   ean, quantity, unit_price, description
+        # parsed = {
+        #   source_id, supplier_document, issue_date, total_amount, items
         # }
-        items = read_nfe_xml(tmp_path)
+        parsed = read_nfe_xml(tmp_path)
+        items = parsed["items"]
 
         # -----------------------------------------------------
         # 4) Match XML items with core products by EAN
         # -----------------------------------------------------
-        # Result:
-        # - matched: items resolved automatically
-        # - needs_review: items that require user confirmation
         matched, needs_review = match_items_by_ean(items)
 
         # -----------------------------------------------------
-        # 5) Return preview response to frontend
+        # 5) Return preview response
         # -----------------------------------------------------
-        # Frontend will:
-        # - show matched items directly
-        # - ask user to resolve needs_review items
         return {
             "status": "ok",
             "data": {
+                # Purchase header (used later in confirm)
+                "purchase": {
+                    "source_id": parsed["source_id"],
+                    "supplier_document": parsed["supplier_document"],
+                    "issue_date": parsed["issue_date"],
+                    "total_amount": parsed["total_amount"],
+                },
+                # Item resolution
                 "matched": matched,
                 "needs_review": needs_review,
+                # UX summary
                 "summary": {
                     "total_items": len(items),
                     "matched": len(matched),
                     "needs_review": len(needs_review),
-                }
-            }
+                },
+            },
         }
 
     finally:
@@ -119,13 +113,12 @@ async def preview_purchase_xml(file: UploadFile = File(...)):
             os.remove(tmp_path)
 
 
-
 # Purchase XML confirm endpoint
 @router.post("/xml/confirm")
 def confirm_purchase_xml(
     payload: PurchaseConfirmPayload,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user), # Requires authentication
+    current_user: User = Depends(get_current_user),  # Requires authentication
 ):
     """
     Confirm a purchase XML after preview.
@@ -134,9 +127,12 @@ def confirm_purchase_xml(
     - Receives confirmed items from frontend
     - Generates IN inventory movements
     - Persists stock changes atomically
+    - Creates ONE accounts payable entry (purchase-based)
     """
-    
+
+    # ---------------------------------------------------------
     # Basic validation
+    # ---------------------------------------------------------
     if not payload.items:
         raise HTTPException(status_code=400, detail="No items to confirm")
 
@@ -146,10 +142,22 @@ def confirm_purchase_xml(
 
         product = db.get(Product, item.product_id)
         if not product:
-            raise HTTPException(status_code=400, detail=f"Invalid product_id: {item.product_id}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid product_id: {item.product_id}",
+            )
 
-    
-    # Process each confirmed item
+    # Simple supplier validation (existence + type)
+    supplier = db.get(Customer, payload.supplier_id)
+    if not supplier:
+        raise HTTPException(status_code=400, detail="Invalid supplier_id")
+    # Allow linking to a Customer that is also a Supplier (type = "both")
+    if supplier.type.lower() == "customer":
+        supplier.type = "both"
+
+    # ---------------------------------------------------------
+    # Process each confirmed item (stock IN)
+    # ---------------------------------------------------------
     for item in payload.items:
         movement = InventoryMovement(
             product_id=item.product_id,
@@ -157,18 +165,36 @@ def confirm_purchase_xml(
             quantity=item.quantity,
             occurred_at=datetime.now(UTC),
             source_entity="purchase_xml",
-            source_id=payload.source_id,
+            source_id=payload.source_id,  # NF-e key
         )
         db.add(movement)
 
+    # ---------------------------------------------------------
+    # Create Accounts Payable (1 purchase -> 1 payable)
+    # ---------------------------------------------------------
+    payable = AccountPayable(
+        supplier_id=payload.supplier_id,
+        source_entity="PURCHASE",
+        source_id=payload.source_id,      # NF-e key
+        amount=payload.total_amount,
+        due_date=payload.issue_date,      # MVP: due date = issue/entry date
+        status="OPEN",
+    )
+    db.add(payable)
+
+    # ---------------------------------------------------------
+    # Commit atomically
+    # ---------------------------------------------------------
     db.commit()
 
     return {
         "status": "ok",
         "data": {
-            "items_created": len(payload.items)
-        }
+            "items_created": len(payload.items),
+            "payable_created": True,
+        },
     }
+
 
 
 # ---------------------------------------------------------

@@ -1,79 +1,60 @@
 # scripts/xml/read_nfe_xml.py
-
 from xml.etree import ElementTree as ET
-
 
 def read_nfe_xml(path: str):
     """
-    Read a Brazilian NF-e XML file and extract basic product information.
+    Read a Brazilian NF-e XML file and extract minimal purchase data.
 
-    IMPORTANT:
-    - This function DOES NOT persist anything.
-    - It only parses and returns raw data.
-    - This is intentional: we validate the real XML structure first.
+    - No persistence
+    - Just parsing
     """
 
-    # ---------------------------------------------------------
-    # Parse XML file into a tree structure
-    # ---------------------------------------------------------
     tree = ET.parse(path)
     root = tree.getroot()
+    ns = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 
     # ---------------------------------------------------------
-    # NF-e uses XML namespaces.
-    # Without this, ElementTree will not find any tags.
+    # Header (purchase-level data)
     # ---------------------------------------------------------
-    ns = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
+    inf_nfe = root.find(".//nfe:infNFe", ns)
+    source_id = inf_nfe.attrib.get("Id") if inf_nfe is not None else None
+
+    emit = root.find(".//nfe:emit", ns)
+    supplier_document = (
+        emit.findtext("nfe:CNPJ", namespaces=ns)
+        or emit.findtext("nfe:CPF", namespaces=ns)
+    )
+
+    ide = root.find(".//nfe:ide", ns)
+    issue_date = ide.findtext("nfe:dhEmi", namespaces=ns)
+
+    total_amount = root.findtext(".//nfe:ICMSTot/nfe:vNF", namespaces=ns)
 
     items = []
 
     # ---------------------------------------------------------
-    # Each <det> node represents ONE item in the invoice
+    # Items
     # ---------------------------------------------------------
     for det in root.findall(".//nfe:det", ns):
         prod = det.find("nfe:prod", ns)
-
         if prod is None:
             continue
 
-        # -----------------------------------------------------
-        # Extract minimal fields we care about for MVP
-        # -----------------------------------------------------
-        item = {
-            # EAN / barcode used to match products
-            "ean": prod.findtext("nfe:cEAN", default=None, namespaces=ns),
+        items.append(
+            {
+                "ean": prod.findtext("nfe:cEAN", default=None, namespaces=ns),
+                "manufacturer_code": prod.findtext("nfe:cProd", default=None, namespaces=ns),
+                "unit": prod.findtext("nfe:uCom", default="", namespaces=ns),
+                "quantity": prod.findtext("nfe:qCom", default="0", namespaces=ns),
+                "unit_price": prod.findtext("nfe:vUnCom", default="0", namespaces=ns),
+                "description": prod.findtext("nfe:xProd", default="", namespaces=ns),
+            }
+        )
 
-            # Manufacturer code from supplier (cProd)
-            "manufacturer_code": prod.findtext("nfe:cProd", default=None, namespaces=ns),
-
-            # Unit of measure (commercial unit)
-            "unit": prod.findtext("nfe:uCom", default="", namespaces=ns),
-
-            # Quantity sold (commercial unit)
-            "quantity": prod.findtext("nfe:qCom", default="0", namespaces=ns),
-
-            # Unit price from supplier
-            "unit_price": prod.findtext("nfe:vUnCom", default="0", namespaces=ns),
-
-            # Product description from XML
-            "description": prod.findtext("nfe:xProd", default="", namespaces=ns),
-        }
-
-        items.append(item)
-
-    return items
-
-
-if __name__ == "__main__":
-    """
-    Manual test runner.
-
-    Run this file directly to see how the XML is parsed.
-    No database, no API, no side effects.
-    """
-
-    xml_path = r"C:\Users\gabri\Downloads\35260104771370000345550010006486301879500382.xml"  # replace with your real XML path
-    data = read_nfe_xml(xml_path)
-
-    for item in data:
-        print(item)
+    return {
+        "source_id": source_id,                 # NF-e key
+        "supplier_document": supplier_document,
+        "issue_date": issue_date,
+        "total_amount": total_amount,
+        "items": items,
+    }
