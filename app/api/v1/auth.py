@@ -39,6 +39,10 @@ router = APIRouter(
 )
 
 
+@router.options("/login")
+def login_options():
+    return {}
+
 @router.post("/login", response_model=Token)
 def login(payload: UserLogin, db: Session = Depends(get_db)):
     """
