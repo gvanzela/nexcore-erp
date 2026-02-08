@@ -101,11 +101,13 @@ def list_receivables(
 
 
 
+# Pay receivable endpoint
 @router.post("/{receivable_id}/pay", response_model=ReceivableOut)
 def pay_receivable(
     receivable_id: int,
     payload: ReceivablePayIn,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Mark a receivable as PAID.
