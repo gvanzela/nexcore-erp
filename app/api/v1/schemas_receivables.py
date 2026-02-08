@@ -14,6 +14,7 @@ class ReceivableOut(BaseModel):
 
     id: int
     customer_id: int
+    customer_name: str
     source_entity: str
     source_id: str
 
