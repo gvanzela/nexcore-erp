@@ -45,20 +45,22 @@ from app.models.order import Order
 from app.models.customer import Customer
 from app.models.user import User
 
-# Order Listing Endpoint with Flexible Filters
+# ---------------------------------------------------------------------------
+# Order Listing Endpoint with Flexible Filters (READ-ONLY)
+# ---------------------------------------------------------------------------
 @router.get("/", response_model=list[OrderResponse])
 def list_orders(
     # Pagination
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
 
-    # Optional filters (mantidos)
+    # Optional filters (technical)
     status: str | None = Query(None),
     customer_id: int | None = Query(None),
     date_from: datetime | None = Query(None),
     date_to: datetime | None = Query(None),
 
-    # NEW: flexible customer search (UX)
+    # UX-driven free search
     customer_search: str | None = Query(None),
 
     db: Session = Depends(get_db),
@@ -67,27 +69,27 @@ def list_orders(
     """
     List orders with optional filters.
 
-    - customer_id: exact (technical / internal)
-    - customer_search: free text (customer name / document)
-    - status: exact
-    - date_from / date_to: range
+    Design principles:
+    - Domain models are NOT mutated
+    - Response is enriched explicitly (read-model)
+    - relationship() is used only for navigation
     """
 
     # -----------------------------------------------------
     # Base query
-    # - items: eager load (avoid N+1 on response)
-    # - customer: eager load (needed for customer_name in response)
+    # - joinedload avoids N+1 queries
+    # - does NOT add fields to the model
     # -----------------------------------------------------
     query = (
         db.query(Order)
         .options(
             joinedload(Order.items),
-            joinedload(Order.customer),  # NEW
+            joinedload(Order.customer),
         )
     )
 
     # -----------------------------------------------------
-    # Exact filters
+    # Exact filters (technical / internal)
     # -----------------------------------------------------
     if status is not None:
         query = query.filter(Order.status == status)
@@ -102,8 +104,8 @@ def list_orders(
         query = query.filter(Order.created_at <= date_to)
 
     # -----------------------------------------------------
-    # NEW: customer free-text search
-    # - Join ONLY for filtering
+    # Free-text customer search (UX)
+    # Requires explicit JOIN for filtering
     # -----------------------------------------------------
     if customer_search:
         ilike = f"%{customer_search}%"
@@ -119,7 +121,7 @@ def list_orders(
         )
 
     # -----------------------------------------------------
-    # Pagination + ordering
+    # Pagination + deterministic ordering
     # -----------------------------------------------------
     orders = (
         query
@@ -130,15 +132,15 @@ def list_orders(
     )
 
     # -----------------------------------------------------
-    # Inject derived field for frontend convenience
+    # Build READ-MODEL response (no ORM mutation)
     # -----------------------------------------------------
-    for order in orders:
-        order.customer_name = order.customer.name if order.customer else None
-
-    return orders
-
-
-
+    return [
+        {
+            **order.__dict__,
+            "customer_name": order.customer.name if order.customer else None,
+        }
+        for order in orders
+    ]
 
 
 # Order Creation Endpoint
