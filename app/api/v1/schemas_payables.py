@@ -23,6 +23,7 @@ class AccountPayableCreate(BaseModel):
 
 class AccountPayableOut(BaseModel):
     id: int
+    supplier_name: str
     supplier_id: int
     source_entity: str
     source_id: str

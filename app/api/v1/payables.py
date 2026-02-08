@@ -2,6 +2,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from app.core.deps import get_db
 from app.models.account_payable import AccountPayable
@@ -55,6 +56,10 @@ def create_payable(
 # ---------------------------------------------------------------------------
 @router.get("", response_model=List[AccountPayableOut])
 def list_payables(
+    search: Optional[str] = Query(
+        None,
+        description="Free search by supplier name, document or purchase reference",
+    ),
     status: Optional[str] = Query(None, description="OPEN or PAID"),
     supplier_id: Optional[int] = Query(None),
     skip: int = Query(0, ge=0),
@@ -62,22 +67,67 @@ def list_payables(
     db: Session = Depends(get_db),
 ):
     """
-    List payables.
+    List accounts payable.
 
-    Minimal filters:
-    - status
-    - supplier_id
+    Design:
+    - UX-driven free search
+    - Optional business filters
+    - Pagination enforced
     """
 
-    query = db.query(AccountPayable)
+    # Base query:
+    # We select AccountPayable + supplier name for UX.
+    query = (
+        db.query(
+            AccountPayable,
+            Customer.name.label("supplier_name"),
+        )
+        .join(Customer, Customer.id == AccountPayable.supplier_id)
+    )
 
-    if status:
+    # ------------------------------------------------------------
+    # Free text search (UX-first)
+    # ------------------------------------------------------------
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                Customer.name.ilike(like),
+                Customer.document.ilike(like),
+                AccountPayable.source_id.ilike(like),
+            )
+        )
+
+    # ------------------------------------------------------------
+    # Business filters
+    # ------------------------------------------------------------
+    if status is not None:
         query = query.filter(AccountPayable.status == status)
 
     if supplier_id is not None:
         query = query.filter(AccountPayable.supplier_id == supplier_id)
 
-    return query.order_by(AccountPayable.created_at.desc()).offset(skip).limit(limit).all()
+    # ------------------------------------------------------------
+    # Pagination + deterministic ordering
+    # ------------------------------------------------------------
+    rows = (
+        query
+        .order_by(AccountPayable.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    # ------------------------------------------------------------
+    # Shape enriched response
+    # ------------------------------------------------------------
+    return [
+        {
+            **payable.__dict__,
+            "supplier_name": supplier_name,
+        }
+        for payable, supplier_name in rows
+    ]
 
 
 # ---------------------------------------------------------------------------
