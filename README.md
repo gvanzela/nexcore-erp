@@ -104,23 +104,78 @@ NF-e XML processing follows a strict, auditable pipeline:
 
 ```text
 nexcore-erp/
-├── README.md                 # Project overview and architecture
+├── README.md                 # Project overview, architecture and principles
 ├── ROADMAP.md                # Product and technical roadmap
+├── .gitignore                # Ignore rules (envs, cache, local artifacts)
 ├── alembic.ini               # Alembic migration configuration
 ├── docker-compose.yml        # Local PostgreSQL container
-├── Dockerfile                # FastAPI container build
+├── Dockerfile                # FastAPI application container
 ├── requirements.txt          # Python dependencies
+│
+├── alembic/
+│   └── versions/             # Database migration history (authoritative)
 │
 ├── app/
 │   ├── main.py               # FastAPI bootstrap and router registration
+│   │
 │   ├── api/
-│   │   └── v1/               # Versioned API endpoints
-│   ├── core/                 # DB, security, audit, config
-│   └── models/               # Domain models (ORM)
+│   │   └── v1/
+│   │       ├── __init__.py           # API v1 namespace
+│   │       ├── auth.py               # Authentication and token lifecycle
+│   │       ├── customers.py          # Customers/Suppliers CRUD + search
+│   │       ├── health.py             # Health check and DB connectivity
+│   │       ├── inventory.py          # Computed stock and inventory listings
+│   │       ├── orders.py             # Orders CRUD + inventory OUT + AR creation
+│   │       ├── receivables.py        # Accounts Receivable (list + pay)
+│   │       ├── payables.py            # Accounts Payable (list + pay)
+│   │       ├── products.py            # Product catalog CRUD
+│   │       ├── purchases.py           # NF-e XML preview / confirm flow
+│   │       ├── schemas.py             # Shared Pydantic schemas (core entities)
+│   │       ├── schemas_auth.py        # Auth schemas
+│   │       ├── schemas_payables.py    # Accounts Payable schemas
+│   │       └── schemas_receivables.py # Accounts Receivable schemas
+│   │
+│   ├── core/
+│   │   ├── __init__.py        # Core utilities namespace
+│   │   ├── audit.py           # Audit log helpers
+│   │   ├── config.py          # Environment and settings loader
+│   │   ├── database.py        # SQLAlchemy engine and Base
+│   │   ├── deps.py            # Dependency injection (DB session lifecycle)
+│   │   └── security.py        # Password hashing, JWT, RBAC, refresh tokens
+│   │
+│   └── models/
+│       ├── __init__.py                # Centralized ORM exports
+│       ├── account_payable.py         # Accounts Payable model
+│       ├── account_receivable.py      # Accounts Receivable model
+│       ├── audit_log.py               # Audit log model
+│       ├── customer.py                # Customer / Supplier model
+│       ├── inventory_movement.py      # Inventory ledger model
+│       ├── order.py                   # Order header model
+│       ├── order_item.py              # Order line-item model
+│       ├── product.py                 # Product catalog model
+│       ├── refresh_token.py           # Refresh token persistence
+│       ├── role.py                    # RBAC role model
+│       ├── stg_record.py              # Universal staging table
+│       └── user.py                    # User and auth model
 │
 └── scripts/
-    ├── etl/                  # Legacy ingestion and normalization
-    └── xml/                  # NF-e XML parsing and matching
+    ├── etl/
+    │   ├── load_customers_from_stg.py         # Promote staged customers
+    │   ├── load_inventory_from_stg.py         # Convert staged inventory to movements
+    │   ├── load_missing_suppliers_from_stg.py # Insert missing suppliers
+    │   ├── load_orders_from_stg.py            # Promote staged orders
+    │   ├── load_products_from_stg.py          # Promote staged products
+    │   ├── load_stg_clients.py                # Extract legacy clients
+    │   ├── load_stg_inventory_initial.py      # Initial inventory snapshot
+    │   ├── load_stg_orders.py                 # Extract legacy orders
+    │   ├── load_stg_products.py               # Extract legacy products
+    │   ├── load_stg_suppliers.py              # Extract legacy suppliers
+    │   └── load_suppliers_from_stg.py         # Normalize supplier role
+    │
+    └── xml/
+        ├── match_items_by_ean.py      # Match NF-e items to products (EAN)
+        ├── promote_purchase_in.py     # Inventory IN from confirmed purchases
+        └── read_nfe_xml.py            # NF-e XML parsing and normalization
 ```
 
 ---
