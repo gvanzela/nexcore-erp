@@ -1,18 +1,14 @@
-// function App() {
-//   return (
-//     <div style={{ padding: 24 }}>
-//       <h1>Nexcore ERP</h1>
-//       <p>Frontend MVP</p>
-//     </div>
-//   )
-// }
-
-// export default App
-
-import Login from './pages/Login'
+import { Routes, Route } from "react-router-dom"
+import Login from "./pages/Login"
+import Dashboard from "./pages/Dashboard"
 
 function App() {
-  return <Login />
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/" element={<Dashboard />} />
+    </Routes>
+  )
 }
 
 export default App

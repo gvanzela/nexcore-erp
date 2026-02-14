@@ -4,6 +4,7 @@
 
 import { useState } from 'react'
 import { login } from '../api/client'
+import { useNavigate } from "react-router-dom"
 
 // Real login screen
 // Calls backend and stores tokens
@@ -12,6 +13,7 @@ function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate()
 
   // Handles login click
   async function handleLogin() {
@@ -29,7 +31,7 @@ function Login() {
 
       // For now: just confirm success
       console.log('Logged in successfully')
-
+      navigate("/")
       // Later: redirect to Orders page
     } catch (err) {
       // Any error = invalid credentials or server error
